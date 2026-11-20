@@ -1,10 +1,11 @@
 import { BarChart3, Flame, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { renderModalHistoryChart } from '../engine/canvasRenderer';
 import { ALGORITHM_META, PRESET_META } from '../engine/elevatorSim';
 import { useModalFocus } from '../hooks/useModalFocus';
-import type { CibseGrade, DistributionMode, TelemetrySnapshot } from '../types/simulation';
+import type { DistributionMode, TelemetrySnapshot } from '../types/simulation';
+import { computeHistoryMax, getCibseGradeColorClass } from '../utils/cibse';
 
 interface MetricsModalProps {
   open: boolean;
@@ -34,22 +35,7 @@ function formatDelta(
   return { text, className };
 }
 
-function getGradeTextColor(grade: CibseGrade): string {
-  switch (grade) {
-    case 'A':
-    case 'B':
-      return 'text-emerald-300';
-    case 'C':
-      return 'text-amber-300';
-    case 'D':
-    case 'F':
-      return 'text-rose-300';
-    default:
-      return 'text-slate-400';
-  }
-}
-
-export function MetricsModal({
+export const MetricsModal = memo(function MetricsModal({
   open,
   telemetry,
   distributionMode,
@@ -57,18 +43,18 @@ export function MetricsModal({
 }: MetricsModalProps) {
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
-  const [chartMax, setChartMax] = useState(0);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
-  useModalFocus(open, onClose, closeBtnRef);
+  useModalFocus(open, onClose, closeBtnRef, panelRef);
+
+  const chartMax = useMemo(
+    () => computeHistoryMax(telemetry.leftHistory, telemetry.rightHistory),
+    [telemetry.leftHistory, telemetry.rightHistory]
+  );
 
   useEffect(() => {
     if (!open || !chartCanvasRef.current) return;
-    const maxQ = renderModalHistoryChart(
-      chartCanvasRef.current,
-      telemetry.leftHistory,
-      telemetry.rightHistory
-    );
-    if (maxQ > 0) setChartMax(maxQ);
+    renderModalHistoryChart(chartCanvasRef.current, telemetry.leftHistory, telemetry.rightHistory);
   }, [open, telemetry.leftHistory, telemetry.rightHistory]);
 
   if (!open) return null;
@@ -236,7 +222,10 @@ export function MetricsModal({
         onClick={onClose}
         className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm cursor-default"
       />
-      <div className="modal-panel-anim relative w-full max-w-2xl max-h-[86dvh] bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div
+        ref={panelRef}
+        className="modal-panel-anim relative w-full max-w-2xl max-h-[86dvh] bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+      >
         <div className="shrink-0 px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-2 bg-slate-950/70">
           <div className="flex items-center gap-2.5 min-w-0">
             <BarChart3 className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
@@ -277,7 +266,7 @@ export function MetricsModal({
             <div className="bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold text-amber-300">{leftMeta.name} (Left)</span>
-                <span className={`font-mono font-bold ${getGradeTextColor(left.cibseGrade)}`}>
+                <span className={`font-mono font-bold ${getCibseGradeColorClass(left.cibseGrade)}`}>
                   Grade {left.cibseGrade} · {left.cibseLabel}
                 </span>
               </div>
@@ -288,7 +277,9 @@ export function MetricsModal({
             <div className="bg-slate-950/70 border border-cyan-900/50 rounded-xl px-3 py-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold text-cyan-300">{rightMeta.name} (Right)</span>
-                <span className={`font-mono font-bold ${getGradeTextColor(right.cibseGrade)}`}>
+                <span
+                  className={`font-mono font-bold ${getCibseGradeColorClass(right.cibseGrade)}`}
+                >
                   Grade {right.cibseGrade} · {right.cibseLabel}
                 </span>
               </div>
@@ -406,4 +397,4 @@ export function MetricsModal({
       </div>
     </dialog>
   );
-}
+});

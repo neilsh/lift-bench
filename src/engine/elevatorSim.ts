@@ -1,34 +1,24 @@
-import type {
-  BuildingWorld,
-  Passenger,
-  SimConfig,
-  SimState,
-} from '../types/simulation';
-import {
-  assignPassengerDestinationDispatch,
-  stepDestinationWorld,
-} from './algorithms/destination';
-import { stepFcfsWorld } from './algorithms/fcfs';
-import { assignPassengerNearestCar, stepNearestWorld } from './algorithms/nearest';
-import { stepStandardWorld } from './algorithms/scan';
-import { assignPassengerSector, stepSectorWorld } from './algorithms/sector';
+import type { BuildingWorld, Passenger, SimConfig, SimState } from '../types/simulation';
+import { DISPATCH_STRATEGIES } from './algorithms/registry';
 import {
   ALGORITHM_META,
   ALGORITHM_ORDER,
+  assertNever,
   computeSectorBands,
+  CONFIG_LIMITS,
   createRng,
   CRUISE_SPEED,
   DEFAULT_CONFIG,
   FIXED_DT,
   getDestinationColor,
-  nowMs,
+  isDispatchAlgorithm,
+  isDistributionMode,
   PRESET_META,
+  PRESET_ORDER,
+  sanitizeSimConfig,
+  THROUGHPUT_WINDOW_SEC,
 } from './constants';
-import {
-  buildTelemetrySnapshot,
-  computeCibseGrade,
-  computeWorldTelemetry,
-} from './telemetry';
+import { buildTelemetrySnapshot, computeCibseGrade, computeWorldTelemetry } from './telemetry';
 import { computeFloorWeights, generatePassengerSpec } from './traffic';
 import {
   countTotalWaiting,
@@ -40,19 +30,26 @@ import {
 export {
   ALGORITHM_META,
   ALGORITHM_ORDER,
+  assertNever,
   buildTelemetrySnapshot,
   computeCibseGrade,
   computeFloorWeights,
   computeSectorBands,
   computeWorldTelemetry,
+  CONFIG_LIMITS,
   countTotalWaiting,
   createRng,
   CRUISE_SPEED,
   DEFAULT_CONFIG,
+  DISPATCH_STRATEGIES,
   FIXED_DT,
   getDestinationColor,
   isCarUnderFireAlarm,
+  isDispatchAlgorithm,
+  isDistributionMode,
   PRESET_META,
+  PRESET_ORDER,
+  sanitizeSimConfig,
 };
 
 function assignPassengerForWorld(
@@ -65,25 +62,7 @@ function assignPassengerForWorld(
     pax.assignedCarId = null;
     return;
   }
-  switch (world.algorithm) {
-    case 'destination':
-      assignPassengerDestinationDispatch(sim, cfg, world, pax, false);
-      break;
-    case 'eco':
-      assignPassengerDestinationDispatch(sim, cfg, world, pax, true);
-      break;
-    case 'nearest':
-      assignPassengerNearestCar(cfg, world, pax);
-      break;
-    case 'sector':
-      assignPassengerSector(world, pax);
-      break;
-    case 'standard':
-    case 'fcfs':
-    default:
-      pax.assignedCarId = null;
-      break;
-  }
+  DISPATCH_STRATEGIES[world.algorithm].assignPassenger(sim, cfg, world, pax);
 }
 
 function spawnPassengerPair(
@@ -116,25 +95,30 @@ export function spawnBurstPassengers(
   count = 12,
   forcedOrigin: number | null = null
 ) {
-  for (let i = 0; i < count; i++) {
-    spawnPassengerPair(sim, cfg, generatePassengerSpec(sim, cfg, forcedOrigin));
+  const safeCfg = sanitizeSimConfig(cfg);
+  const safeCount = Math.max(0, Math.floor(count));
+  const clampedOrigin =
+    forcedOrigin === null ? null : Math.max(1, Math.min(safeCfg.floors, Math.round(forcedOrigin)));
+
+  for (let i = 0; i < safeCount; i++) {
+    spawnPassengerPair(sim, safeCfg, generatePassengerSpec(sim, safeCfg, clampedOrigin));
   }
-  if (forcedOrigin !== null) {
+  if (clampedOrigin !== null) {
     sim.floorRipples.push({
-      floor: forcedOrigin,
-      born: nowMs(),
-      duration: 750,
+      floor: clampedOrigin,
+      bornSimTime: sim.simTime,
+      durationSimSec: 1.5,
     });
+    if (sim.floorRipples.length > 24) {
+      sim.floorRipples.shift();
+    }
   }
 }
 
-export function createSimulation(
-  cfg: SimConfig,
-  seed: number,
-  warmUpSeconds = 75
-): SimState {
+export function createSimulation(cfg: SimConfig, seed: number, warmUpSeconds = 75): SimState {
+  const safeCfg = sanitizeSimConfig(cfg);
   const rng = createRng(seed);
-  const floorMeta = computeFloorWeights(cfg.floors, cfg.distributionMode);
+  const floorMeta = computeFloorWeights(safeCfg.floors, safeCfg.distributionMode);
 
   const sim: SimState = {
     simTime: 0,
@@ -149,22 +133,25 @@ export function createSimulation(
     fireAlarmActive: false,
     stairEvacTimer: 0,
     floorRipples: [],
-    left: createBuildingWorld('left', cfg.leftAlgorithm, cfg),
-    right: createBuildingWorld('right', cfg.rightAlgorithm, cfg),
+    left: createBuildingWorld('left', safeCfg.leftAlgorithm, safeCfg),
+    right: createBuildingWorld('right', safeCfg.rightAlgorithm, safeCfg),
   };
 
-  const warmSteps = Math.floor(warmUpSeconds / FIXED_DT);
+  const warmSteps = Math.max(0, Math.floor(warmUpSeconds / FIXED_DT));
   for (let i = 0; i < warmSteps; i++) {
-    stepTwinSimulation(sim, cfg, FIXED_DT);
+    stepTwinSimulation(sim, safeCfg, FIXED_DT);
   }
 
   sim.left.deliveryEffects = [];
   sim.right.deliveryEffects = [];
+  sim.floorRipples = [];
 
   return sim;
 }
 
 export function toggleFireAlarmState(sim: SimState, cfg: SimConfig) {
+  const safeCfg = sanitizeSimConfig(cfg);
+
   if (!sim.fireAlarmActive) {
     sim.fireAlarmActive = true;
     sim.stairEvacTimer = 1.6;
@@ -181,7 +168,7 @@ export function toggleFireAlarmState(sim: SimState, cfg: SimConfig) {
         car.batchHoldUsed = 0;
 
         if (car.floor <= 1.05) {
-          evacuateCarAtLobby(world, car);
+          evacuateCarAtLobby(sim.simTime, world, car);
         } else {
           car.state = 'FIRE_RECALL';
           car.direction = -1;
@@ -208,52 +195,39 @@ export function toggleFireAlarmState(sim: SimState, cfg: SimConfig) {
         }
       }
 
-      for (let f = 1; f <= cfg.floors; f++) {
+      for (let f = 1; f <= safeCfg.floors; f++) {
         const q = world.waitingQueues[f];
         for (let i = 0; i < q.length; i++) {
           q[i].assignedCarId = null;
-          assignPassengerForWorld(sim, cfg, world, q[i]);
+          assignPassengerForWorld(sim, safeCfg, world, q[i]);
         }
       }
     });
   }
 }
 
-function stepWorldByAlgorithm(
-  sim: SimState,
-  cfg: SimConfig,
-  world: BuildingWorld,
-  dt: number
-) {
-  switch (world.algorithm) {
-    case 'standard':
-      stepStandardWorld(sim, cfg, world, dt);
-      break;
-    case 'destination':
-      stepDestinationWorld(sim, cfg, world, dt, false);
-      break;
-    case 'eco':
-      stepDestinationWorld(sim, cfg, world, dt, true);
-      break;
-    case 'nearest':
-      stepNearestWorld(sim, cfg, world, dt);
-      break;
-    case 'sector':
-      stepSectorWorld(sim, cfg, world, dt);
-      break;
-    case 'fcfs':
-      stepFcfsWorld(sim, cfg, world, dt);
-      break;
+function pruneExpiredWorldArtifacts(simTime: number, world: BuildingWorld) {
+  const throughputCutoff = simTime - THROUGHPUT_WINDOW_SEC;
+  while (world.completionTimes.length > 0 && world.completionTimes[0] < throughputCutoff) {
+    world.completionTimes.shift();
+  }
+
+  for (let i = world.deliveryEffects.length - 1; i >= 0; i--) {
+    const eff = world.deliveryEffects[i];
+    if (simTime - eff.bornSimTime >= eff.durationSimSec) {
+      world.deliveryEffects.splice(i, 1);
+    }
   }
 }
 
 export function stepTwinSimulation(sim: SimState, cfg: SimConfig, dt: number) {
+  const safeCfg = sanitizeSimConfig(cfg);
   sim.simTime += dt;
 
   if (!sim.fireAlarmActive) {
     if (sim.simTime >= sim.nextSpawnTime) {
-      spawnPassengerPair(sim, cfg, generatePassengerSpec(sim, cfg));
-      const ratePerSec = cfg.arrivalRate / 60;
+      spawnPassengerPair(sim, safeCfg, generatePassengerSpec(sim, safeCfg));
+      const ratePerSec = safeCfg.arrivalRate / 60;
       const u = Math.max(1e-6, sim.rng());
       const interArrival = -Math.log(u) / ratePerSec;
       sim.nextSpawnTime = sim.simTime + Math.min(interArrival, 12);
@@ -263,7 +237,7 @@ export function stepTwinSimulation(sim: SimState, cfg: SimConfig, dt: number) {
     if (sim.stairEvacTimer <= 0) {
       sim.stairEvacTimer = 1.1;
       [sim.left, sim.right].forEach((world) => {
-        for (let f = cfg.floors; f >= 1; f--) {
+        for (let f = safeCfg.floors; f >= 1; f--) {
           const q = world.waitingQueues[f];
           if (q.length > 0) {
             q.shift();
@@ -275,8 +249,18 @@ export function stepTwinSimulation(sim: SimState, cfg: SimConfig, dt: number) {
     }
   }
 
-  stepWorldByAlgorithm(sim, cfg, sim.left, dt);
-  stepWorldByAlgorithm(sim, cfg, sim.right, dt);
+  DISPATCH_STRATEGIES[sim.left.algorithm].stepWorld(sim, safeCfg, sim.left, dt);
+  DISPATCH_STRATEGIES[sim.right.algorithm].stepWorld(sim, safeCfg, sim.right, dt);
+
+  pruneExpiredWorldArtifacts(sim.simTime, sim.left);
+  pruneExpiredWorldArtifacts(sim.simTime, sim.right);
+
+  for (let r = sim.floorRipples.length - 1; r >= 0; r--) {
+    const rip = sim.floorRipples[r];
+    if (sim.simTime - rip.bornSimTime >= rip.durationSimSec) {
+      sim.floorRipples.splice(r, 1);
+    }
+  }
 
   const secFloor = Math.floor(sim.simTime);
   if (secFloor > sim.left.lastHistorySample) {

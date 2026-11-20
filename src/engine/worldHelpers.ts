@@ -7,7 +7,7 @@ import type {
   SimState,
   TowerSide,
 } from '../types/simulation';
-import { computeSectorBands, CRUISE_SPEED, nowMs } from './constants';
+import { computeSectorBands, CRUISE_SPEED } from './constants';
 
 export function isCarUnderFireAlarm(car: ElevatorCar): boolean {
   return car.state === 'FIRE_RECALL' || car.state === 'FIRE_LOCKED';
@@ -134,6 +134,7 @@ export function startCarMoving(
 }
 
 export function addDeliveryEffect(
+  simTime: number,
   world: BuildingWorld,
   carId: number,
   floor: number,
@@ -146,8 +147,8 @@ export function addDeliveryEffect(
     floor,
     count,
     labelPrefix,
-    born: nowMs(),
-    duration: labelPrefix === 'EVAC ' ? 1200 : 900,
+    bornSimTime: simTime,
+    durationSimSec: labelPrefix === 'EVAC ' ? 2.4 : 1.6,
   });
   if (world.deliveryEffects.length > 28) world.deliveryEffects.shift();
 }
@@ -168,7 +169,7 @@ export function alightPassengersAtFloor(
     }
   }
   if (alighted > 0) {
-    addDeliveryEffect(world, car.id, floor, alighted);
+    addDeliveryEffect(sim.simTime, world, car.id, floor, alighted);
   }
   return alighted;
 }
@@ -255,10 +256,7 @@ export function isCarAtFloorReady(
   if (carId === null || carId === undefined) return false;
   const c = world.cars[carId];
   if (!c || isCarUnderFireAlarm(c) || c.departing) return false;
-  return (
-    Math.abs(c.floor - floor) < 0.08 &&
-    (c.state === 'DWELLING' || c.state === 'IDLE')
-  );
+  return Math.abs(c.floor - floor) < 0.08 && (c.state === 'DWELLING' || c.state === 'IDLE');
 }
 
 export function estimateCarEtaToFloor(
@@ -277,9 +275,7 @@ export function estimateCarEtaToFloor(
 
   if (car.state === 'DWELLING') {
     const dirConflict =
-      car.passengers.length > 0 &&
-      car.direction !== 0 &&
-      car.direction !== targetDir;
+      car.passengers.length > 0 && car.direction !== 0 && car.direction !== targetDir;
 
     if (atFloorNow && !dirConflict) {
       return 0;
@@ -317,8 +313,7 @@ export function estimateCarEtaToFloor(
 
       return (
         car.dwellTimer +
-        (Math.abs(extremeFloor - car.floor) + Math.abs(extremeFloor - targetFloor)) /
-          CRUISE_SPEED +
+        (Math.abs(extremeFloor - car.floor) + Math.abs(extremeFloor - targetFloor)) / CRUISE_SPEED +
         stopSet.size * stopPenalty
       );
     }
@@ -338,9 +333,7 @@ export function estimateCarEtaToFloor(
     (car.direction === 1 && targetFloor >= car.floor - 0.05) ||
     (car.direction === -1 && targetFloor <= car.floor + 0.05);
   const dirCompatible =
-    car.passengers.length === 0 ||
-    car.direction === 0 ||
-    car.direction === targetDir;
+    car.passengers.length === 0 || car.direction === 0 || car.direction === targetDir;
 
   if (movingToward && dirCompatible) {
     let stopsBefore = 0;
@@ -352,20 +345,16 @@ export function estimateCarEtaToFloor(
         stopsBefore++;
       }
     }
-    return (
-      Math.abs(targetFloor - car.floor) / CRUISE_SPEED +
-      stopsBefore * stopPenalty
-    );
+    return Math.abs(targetFloor - car.floor) / CRUISE_SPEED + stopsBefore * stopPenalty;
   }
 
   return (
-    (Math.abs(extremeFloor - car.floor) + Math.abs(extremeFloor - targetFloor)) /
-      CRUISE_SPEED +
+    (Math.abs(extremeFloor - car.floor) + Math.abs(extremeFloor - targetFloor)) / CRUISE_SPEED +
     stopSet.size * stopPenalty
   );
 }
 
-export function evacuateCarAtLobby(world: BuildingWorld, car: ElevatorCar) {
+export function evacuateCarAtLobby(simTime: number, world: BuildingWorld, car: ElevatorCar) {
   car.floor = 1;
   car.direction = 0;
   car.state = 'FIRE_LOCKED';
@@ -383,11 +372,16 @@ export function evacuateCarAtLobby(world: BuildingWorld, car: ElevatorCar) {
     const evacCount = car.passengers.length;
     world.evacuatedCount += evacCount;
     car.passengers = [];
-    addDeliveryEffect(world, car.id, 1, evacCount, 'EVAC ');
+    addDeliveryEffect(simTime, world, car.id, 1, evacCount, 'EVAC ');
   }
 }
 
-export function stepFireRecallCar(world: BuildingWorld, car: ElevatorCar, dt: number) {
+export function stepFireRecallCar(
+  simTime: number,
+  world: BuildingWorld,
+  car: ElevatorCar,
+  dt: number
+) {
   if (car.state === 'FIRE_LOCKED') {
     car.floor = 1;
     car.direction = 0;
@@ -397,7 +391,7 @@ export function stepFireRecallCar(world: BuildingWorld, car: ElevatorCar, dt: nu
 
   car.targetFloors = [1];
   if (car.floor <= 1.02) {
-    evacuateCarAtLobby(world, car);
+    evacuateCarAtLobby(simTime, world, car);
     return;
   }
 
@@ -408,6 +402,6 @@ export function stepFireRecallCar(world: BuildingWorld, car: ElevatorCar, dt: nu
   car.floor -= travel;
 
   if (car.floor <= 1.02) {
-    evacuateCarAtLobby(world, car);
+    evacuateCarAtLobby(simTime, world, car);
   }
 }

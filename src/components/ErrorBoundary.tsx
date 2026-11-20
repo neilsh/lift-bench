@@ -12,7 +12,7 @@ interface ErrorBoundaryState {
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = {
+  override state: ErrorBoundaryState = {
     hasError: false,
     message: '',
   };
@@ -24,7 +24,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('LiftBench ErrorBoundary caught error:', error, info.componentStack);
   }
 
@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.setState({ hasError: false, message: '' });
   };
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center h-full w-full bg-[#090d16] text-slate-100 p-6">

@@ -24,13 +24,9 @@ export function assignPassengerNearestCar(
   pax: Passenger,
   excludeCarId = -1
 ) {
-  const healthyCars = world.cars.filter(
-    (c) => !isCarUnderFireAlarm(c) && c.id !== excludeCarId
-  );
+  const healthyCars = world.cars.filter((c) => !isCarUnderFireAlarm(c) && c.id !== excludeCarId);
   const pool =
-    healthyCars.length > 0
-      ? healthyCars
-      : world.cars.filter((c) => !isCarUnderFireAlarm(c));
+    healthyCars.length > 0 ? healthyCars : world.cars.filter((c) => !isCarUnderFireAlarm(c));
 
   if (pool.length === 0) {
     pax.assignedCarId = null;
@@ -177,7 +173,7 @@ function beginNearestStop(
   }
 
   for (let pass = 0; pass < 2 && car.passengers.length < cap; pass++) {
-    for (let i = 0; i < q.length && car.passengers.length < cap; ) {
+    for (let i = 0; i < q.length && car.passengers.length < cap;) {
       const cand = q[i];
       const matchPass = pass === 0 ? cand.assignedCarId === car.id : true;
       const dirOk = car.direction === 0 || cand.dir === car.direction;
@@ -210,12 +206,7 @@ function beginNearestStop(
   car.state = 'DWELLING';
 }
 
-export function stepNearestWorld(
-  sim: SimState,
-  cfg: SimConfig,
-  world: BuildingWorld,
-  dt: number
-) {
+export function stepNearestWorld(sim: SimState, cfg: SimConfig, world: BuildingWorld, dt: number) {
   const cars = world.cars;
   const cap = cfg.carCapacity;
   const stopPenalty = cfg.stopPenalty;
@@ -236,7 +227,7 @@ export function stepNearestWorld(
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
     if (isCarUnderFireAlarm(car)) {
-      stepFireRecallCar(world, car, dt);
+      stepFireRecallCar(sim.simTime, world, car, dt);
       continue;
     }
 
@@ -252,7 +243,7 @@ export function stepNearestWorld(
           const mine = q.find((p) => p.assignedCarId === car.id);
           car.direction = (mine ?? q[0]).dir;
         }
-        for (let k = 0; k < q.length && car.passengers.length < cap; ) {
+        for (let k = 0; k < q.length && car.passengers.length < cap;) {
           if (q[k].dir === car.direction) {
             const boarded = q.splice(k, 1)[0];
             boarded.assignedCarId = car.id;
@@ -292,14 +283,7 @@ export function stepNearestWorld(
         const refreshed = getAssignedPassengersForCar(world, car.id);
         const nextFloor = pickNextNearestFloor(cfg, car, refreshed);
         if (nextFloor !== null && nextFloor !== curFloor) {
-          startCarMoving(
-            sim,
-            world,
-            car,
-            curFloor,
-            nextFloor,
-            buildRoutePreview(car, refreshed)
-          );
+          startCarMoving(sim, world, car, curFloor, nextFloor, buildRoutePreview(car, refreshed));
         } else {
           car.direction = 0;
           car.state = 'IDLE';

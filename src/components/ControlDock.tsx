@@ -9,6 +9,8 @@ import {
   SlidersHorizontal,
   Zap,
 } from 'lucide-react';
+import { memo } from 'react';
+import { CONFIG_LIMITS } from '../engine/elevatorSim';
 import type { PlaybackState, SimConfig } from '../types/simulation';
 
 interface ControlDockProps {
@@ -28,7 +30,7 @@ interface ControlDockProps {
 
 const SPEEDS: PlaybackState['speed'][] = [1, 3, 8];
 
-export function ControlDock({
+export const ControlDock = memo(function ControlDock({
   config,
   paused,
   speed,
@@ -161,9 +163,9 @@ export function ControlDock({
               id="sliderArrival"
               className="sim-slider"
               type="range"
-              min={10}
-              max={90}
-              step={2}
+              min={CONFIG_LIMITS.arrivalRate.min}
+              max={CONFIG_LIMITS.arrivalRate.max}
+              step={CONFIG_LIMITS.arrivalRate.step}
               value={config.arrivalRate}
               onChange={(e) => onConfigChange({ arrivalRate: Number(e.target.value) }, false)}
             />
@@ -182,9 +184,9 @@ export function ControlDock({
               id="sliderFloors"
               className="sim-slider"
               type="range"
-              min={8}
-              max={24}
-              step={1}
+              min={CONFIG_LIMITS.floors.min}
+              max={CONFIG_LIMITS.floors.max}
+              step={CONFIG_LIMITS.floors.step}
               value={config.floors}
               onChange={(e) => onConfigChange({ floors: Number(e.target.value) }, true)}
             />
@@ -203,9 +205,9 @@ export function ControlDock({
               id="sliderCars"
               className="sim-slider"
               type="range"
-              min={2}
-              max={5}
-              step={1}
+              min={CONFIG_LIMITS.cars.min}
+              max={CONFIG_LIMITS.cars.max}
+              step={CONFIG_LIMITS.cars.step}
               value={config.cars}
               onChange={(e) => onConfigChange({ cars: Number(e.target.value) }, true)}
             />
@@ -224,9 +226,9 @@ export function ControlDock({
               id="sliderStopPenalty"
               className="sim-slider"
               type="range"
-              min={2}
-              max={10}
-              step={0.5}
+              min={CONFIG_LIMITS.stopPenalty.min}
+              max={CONFIG_LIMITS.stopPenalty.max}
+              step={CONFIG_LIMITS.stopPenalty.step}
               value={config.stopPenalty}
               onChange={(e) => onConfigChange({ stopPenalty: Number(e.target.value) }, false)}
             />
@@ -245,9 +247,9 @@ export function ControlDock({
               id="sliderCapacity"
               className="sim-slider"
               type="range"
-              min={4}
-              max={16}
-              step={1}
+              min={CONFIG_LIMITS.carCapacity.min}
+              max={CONFIG_LIMITS.carCapacity.max}
+              step={CONFIG_LIMITS.carCapacity.step}
               value={config.carCapacity}
               onChange={(e) => onConfigChange({ carCapacity: Number(e.target.value) }, false)}
             />
@@ -256,4 +258,4 @@ export function ControlDock({
       </div>
     </footer>
   );
-}
+});

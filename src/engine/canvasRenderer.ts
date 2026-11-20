@@ -7,32 +7,26 @@ import type {
 } from '../types/simulation';
 import { isCarUnderFireAlarm, PRESET_META } from './elevatorSim';
 
-function ensureRoundRectPolyfill() {
-  if (
-    typeof CanvasRenderingContext2D !== 'undefined' &&
-    !CanvasRenderingContext2D.prototype.roundRect
-  ) {
-    CanvasRenderingContext2D.prototype.roundRect = function (
-      x: number,
-      y: number,
-      w: number,
-      h: number,
-      r?: number | number[]
-    ) {
-      const radius = typeof r === 'number' ? r : Array.isArray(r) ? r[0] : 0;
-      const cr = Math.min(radius, Math.abs(w) / 2, Math.abs(h) / 2);
-      this.moveTo(x + cr, y);
-      this.arcTo(x + w, y, x + w, y + h, cr);
-      this.arcTo(x + w, y + h, x, y + h, cr);
-      this.arcTo(x, y + h, x, y, cr);
-      this.arcTo(x, y, x + w, y, cr);
-      this.closePath();
-      return this;
-    };
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, r);
+    return;
   }
+  const cr = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+  ctx.moveTo(x + cr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, cr);
+  ctx.arcTo(x + w, y + h, x, y + h, cr);
+  ctx.arcTo(x, y + h, x, y, cr);
+  ctx.arcTo(x, y, x + w, y, cr);
+  ctx.closePath();
 }
-
-ensureRoundRectPolyfill();
 
 interface TowerRenderOpts {
   ctx: CanvasRenderingContext2D;
@@ -130,14 +124,10 @@ function renderBuildingTower({
         const zTop = getFloorBottomY(car.sectorMax) - floorH;
         const zBot = getFloorBottomY(car.sectorMin);
         ctx.fillStyle =
-          world.side === 'left'
-            ? 'rgba(251, 191, 36, 0.06)'
-            : 'rgba(34, 211, 238, 0.06)';
+          world.side === 'left' ? 'rgba(251, 191, 36, 0.06)' : 'rgba(34, 211, 238, 0.06)';
         ctx.fillRect(sx + 2, zTop + 1, shaftW - 4, zBot - zTop - 2);
         ctx.strokeStyle =
-          world.side === 'left'
-            ? 'rgba(251, 191, 36, 0.25)'
-            : 'rgba(34, 211, 238, 0.25)';
+          world.side === 'left' ? 'rgba(251, 191, 36, 0.25)' : 'rgba(34, 211, 238, 0.25)';
         ctx.lineWidth = 1;
         ctx.strokeRect(sx + 2.5, zTop + 1.5, shaftW - 5, zBot - zTop - 3);
       }
@@ -146,9 +136,7 @@ function renderBuildingTower({
       for (const tf of car.targetFloors) {
         const ty = getFloorCenterY(tf);
         const isActiveNow =
-          activeStops.has(tf) ||
-          world.algorithm === 'standard' ||
-          world.algorithm === 'fcfs';
+          activeStops.has(tf) || world.algorithm === 'standard' || world.algorithm === 'fcfs';
         ctx.fillStyle = accentColor;
         ctx.globalAlpha = isActiveNow ? 0.65 : 0.22;
         ctx.fillRect(sx + 4, ty - 1.5, shaftW - 8, isActiveNow ? 3 : 2);
@@ -182,14 +170,14 @@ function renderBuildingTower({
     if (underAlarm) {
       ctx.fillStyle = `rgba(244, 63, 94, ${0.12 + alarmStrobe * 0.12})`;
       ctx.beginPath();
-      ctx.roundRect(cx - 2, cy - 2, carW + 4, carH + 4, 6);
+      drawRoundedRect(ctx, cx - 2, cy - 2, carW + 4, carH + 4, 6);
       ctx.fill();
 
       ctx.fillStyle = car.state === 'FIRE_LOCKED' ? '#2c0f18' : '#3b101b';
       ctx.strokeStyle = `rgba(244, 63, 94, ${0.55 + alarmStrobe * 0.45})`;
       ctx.lineWidth = 1.7;
       ctx.beginPath();
-      ctx.roundRect(cx, cy, carW, carH, 4);
+      drawRoundedRect(ctx, cx, cy, carW, carH, 4);
       ctx.fill();
       ctx.stroke();
 
@@ -219,25 +207,19 @@ function renderBuildingTower({
     } else {
       if (car.state === 'DWELLING') {
         ctx.fillStyle =
-          world.side === 'left'
-            ? 'rgba(251, 191, 36, 0.10)'
-            : 'rgba(34, 211, 238, 0.12)';
+          world.side === 'left' ? 'rgba(251, 191, 36, 0.10)' : 'rgba(34, 211, 238, 0.12)';
         ctx.beginPath();
-        ctx.roundRect(cx - 2, cy - 2, carW + 4, carH + 4, 6);
+        drawRoundedRect(ctx, cx - 2, cy - 2, carW + 4, carH + 4, 6);
         ctx.fill();
       }
 
       ctx.fillStyle = car.state === 'DWELLING' ? '#1e293b' : '#0f172a';
       ctx.strokeStyle =
-        car.state === 'DWELLING'
-          ? accentColor
-          : car.state === 'MOVING'
-            ? '#94a3b8'
-            : '#475569';
+        car.state === 'DWELLING' ? accentColor : car.state === 'MOVING' ? '#94a3b8' : '#475569';
       ctx.lineWidth = car.state === 'DWELLING' ? 1.6 : 1.1;
 
       ctx.beginPath();
-      ctx.roundRect(cx, cy, carW, carH, 4);
+      drawRoundedRect(ctx, cx, cy, carW, carH, 4);
       ctx.fill();
       ctx.stroke();
 
@@ -298,11 +280,10 @@ function renderBuildingTower({
     }
   }
 
-  for (let eIdx = world.deliveryEffects.length - 1; eIdx >= 0; eIdx--) {
+  for (let eIdx = 0; eIdx < world.deliveryEffects.length; eIdx++) {
     const eff = world.deliveryEffects[eIdx];
-    const age = (nowMs - eff.born) / eff.duration;
-    if (age >= 1) {
-      world.deliveryEffects.splice(eIdx, 1);
+    const age = (sim.simTime - eff.bornSimTime) / eff.durationSimSec;
+    if (age < 0 || age >= 1) {
       continue;
     }
     const ex = bankX + eff.carId * shaftW + shaftW * 0.5;
@@ -328,9 +309,7 @@ function renderBuildingTower({
 
   for (let f = 1; f <= cfg.floors; f++) {
     const isHoveredFloor =
-      hoverTarget?.kind === 'floor' &&
-      hoverTarget.side === world.side &&
-      hoverTarget.floor === f;
+      hoverTarget?.kind === 'floor' && hoverTarget.side === world.side && hoverTarget.floor === f;
     if (isHoveredFloor) {
       const yTop = getFloorBottomY(f) - floorH;
       ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
@@ -384,7 +363,7 @@ function renderBuildingTower({
 
       ctx.fillStyle = overflow >= 10 ? '#e11d48' : '#334155';
       ctx.beginPath();
-      ctx.roundRect(bx, by, badgeW, badgeH, 4);
+      drawRoundedRect(ctx, bx, by, badgeW, badgeH, 4);
       ctx.fill();
 
       ctx.fillStyle = '#f8fafc';
@@ -402,7 +381,8 @@ export function renderSimulationCanvas(
   logicalW: number,
   logicalH: number,
   reducedMotion = false,
-  hoverTarget: CanvasHoverTarget | null = null
+  hoverTarget: CanvasHoverTarget | null = null,
+  frameNowMs = typeof performance !== 'undefined' ? performance.now() : 0
 ): CanvasLayout | null {
   const ctx = canvas.getContext('2d');
   if (!ctx || logicalW <= 0 || logicalH <= 0) return null;
@@ -457,7 +437,7 @@ export function renderSimulationCanvas(
     cars: numCars,
   };
 
-  const nowMs = performance.now();
+  const nowMs = frameNowMs;
   const alarmStrobe = reducedMotion ? 0.65 : 0.5 + 0.5 * Math.sin(nowMs * 0.012);
 
   const bgGrad = ctx.createRadialGradient(
@@ -491,9 +471,7 @@ export function renderSimulationCanvas(
 
     if (cfg.distributionMode !== 'uniform' && f === sim.hotspotFloor) {
       ctx.fillStyle =
-        cfg.distributionMode === 'vip'
-          ? 'rgba(192, 132, 252, 0.08)'
-          : 'rgba(245, 158, 11, 0.06)';
+        cfg.distributionMode === 'vip' ? 'rgba(192, 132, 252, 0.08)' : 'rgba(245, 158, 11, 0.06)';
       ctx.fillRect(sidePad, yTop, W - sidePad * 2, floorH);
     }
 
@@ -517,11 +495,10 @@ export function renderSimulationCanvas(
     ctx.stroke();
   }
 
-  for (let r = sim.floorRipples.length - 1; r >= 0; r--) {
+  for (let r = 0; r < sim.floorRipples.length; r++) {
     const rip = sim.floorRipples[r];
-    const age = (nowMs - rip.born) / rip.duration;
-    if (age >= 1) {
-      sim.floorRipples.splice(r, 1);
+    const age = (sim.simTime - rip.bornSimTime) / rip.durationSimSec;
+    if (age < 0 || age >= 1) {
       continue;
     }
     const yTop = getFloorBottomY(rip.floor) - floorH;

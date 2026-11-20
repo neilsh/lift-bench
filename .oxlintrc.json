@@ -6,11 +6,18 @@
     "suspicious": "warn"
   },
   "rules": {
-    "react/react-in-jsx-scope": "off"
+    "eqeqeq": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "react/react-in-jsx-scope": "off",
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "typescript/consistent-type-imports": "error"
   },
   "env": {
     "browser": true,
     "es2022": true
   },
-  "ignorePatterns": ["dist/**", "public/**"]
+  "ignorePatterns": ["dist/**", "coverage/**", "public/**"]
 }

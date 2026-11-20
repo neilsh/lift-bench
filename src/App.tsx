@@ -17,7 +17,6 @@ export default function App() {
     containerRef,
     canvasRef,
     layoutRef,
-    resizeCanvas,
     handleSelectPreset,
     handleSelectAlgorithm,
     handleTogglePause,
@@ -38,8 +37,7 @@ export default function App() {
 
   const handleToggleDrawer = useCallback(() => {
     setDrawerOpen((prev) => !prev);
-    setTimeout(resizeCanvas, 10);
-  }, [resizeCanvas]);
+  }, []);
 
   const handleOpenGuide = useCallback((algo?: DispatchAlgorithm) => {
     setFocusedAlgorithm(algo ?? null);
@@ -48,6 +46,10 @@ export default function App() {
 
   const handleCloseGuide = useCallback(() => {
     setGuideOpen(false);
+  }, []);
+
+  const handleOpenMetrics = useCallback(() => {
+    setMetricsModalOpen(true);
   }, []);
 
   const handleCloseMetrics = useCallback(() => {
@@ -68,7 +70,7 @@ export default function App() {
         rightAlgorithm={config.rightAlgorithm}
         onSelectPreset={handleSelectPreset}
         onSelectAlgorithm={handleSelectAlgorithm}
-        onOpenMetrics={() => setMetricsModalOpen(true)}
+        onOpenMetrics={handleOpenMetrics}
         onOpenGuide={handleOpenGuide}
       />
 

@@ -6,7 +6,7 @@ import type {
   TelemetrySnapshot,
   WorldTelemetry,
 } from '../types/simulation';
-import { CRUISE_SPEED } from './constants';
+import { CRUISE_SPEED, THROUGHPUT_WINDOW_SEC } from './constants';
 
 export function computePercentile(arr: number[], pct: number): number {
   if (!arr || arr.length === 0) return 0;
@@ -92,13 +92,17 @@ export function computeWorldTelemetry(
   const p95TTD = computePercentile(world.ttdSamples, 0.95);
   const p95Wait = Math.max(computePercentile(world.waitSamples, 0.95), maxCurrentWait * 0.85);
 
-  const windowSec = 120;
-  const cutoff = sim.simTime - windowSec;
-  while (world.completionTimes.length > 0 && world.completionTimes[0] < cutoff) {
-    world.completionTimes.shift();
+  const cutoff = sim.simTime - THROUGHPUT_WINDOW_SEC;
+  let recentCompletions = 0;
+  for (let i = world.completionTimes.length - 1; i >= 0; i--) {
+    if (world.completionTimes[i] >= cutoff) {
+      recentCompletions++;
+    } else {
+      break;
+    }
   }
-  const effectiveWindow = Math.max(10, Math.min(windowSec, sim.simTime));
-  const throughput = (world.completionTimes.length / effectiveWindow) * 60;
+  const effectiveWindow = Math.max(10, Math.min(THROUGHPUT_WINDOW_SEC, sim.simTime));
+  const throughput = (recentCompletions / effectiveWindow) * 60;
 
   let totalStops = 0;
   let totalTrips = 0;
@@ -128,9 +132,7 @@ export function computeWorldTelemetry(
 
   const departs = world.lobbyDepartTimes;
   const lobbyInterval =
-    departs.length >= 2
-      ? (departs[departs.length - 1] - departs[0]) / (departs.length - 1)
-      : 0;
+    departs.length >= 2 ? (departs[departs.length - 1] - departs[0]) / (departs.length - 1) : 0;
 
   return {
     avgTTD,

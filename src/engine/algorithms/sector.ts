@@ -162,12 +162,9 @@ function beginSectorStop(
     }
   }
 
-  for (let i = 0; i < q.length && car.passengers.length < cap; ) {
+  for (let i = 0; i < q.length && car.passengers.length < cap;) {
     const cand = q[i];
-    if (
-      cand.assignedCarId === car.id &&
-      (car.direction === 0 || cand.dir === car.direction)
-    ) {
+    if (cand.assignedCarId === car.id && (car.direction === 0 || cand.dir === car.direction)) {
       const boarded = q.splice(i, 1)[0];
       if (car.direction === 0) car.direction = boarded.dir;
       boarded.boardTime = sim.simTime;
@@ -194,12 +191,7 @@ function beginSectorStop(
   car.state = 'DWELLING';
 }
 
-export function stepSectorWorld(
-  sim: SimState,
-  cfg: SimConfig,
-  world: BuildingWorld,
-  dt: number
-) {
+export function stepSectorWorld(sim: SimState, cfg: SimConfig, world: BuildingWorld, dt: number) {
   const cars = world.cars;
   const cap = cfg.carCapacity;
   const stopPenalty = cfg.stopPenalty;
@@ -220,7 +212,7 @@ export function stepSectorWorld(
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
     if (isCarUnderFireAlarm(car)) {
-      stepFireRecallCar(world, car, dt);
+      stepFireRecallCar(sim.simTime, world, car, dt);
       continue;
     }
 
@@ -232,12 +224,10 @@ export function stepSectorWorld(
       let extraBoarded = 0;
 
       if (!car.departing && car.passengers.length < cap) {
-        for (let k = 0; k < q.length && car.passengers.length < cap; ) {
+        for (let k = 0; k < q.length && car.passengers.length < cap;) {
           const cand = q[k];
           const dirOk =
-            car.passengers.length === 0 ||
-            car.direction === 0 ||
-            cand.dir === car.direction;
+            car.passengers.length === 0 || car.direction === 0 || cand.dir === car.direction;
           if (cand.assignedCarId === car.id && dirOk) {
             const boarded = q.splice(k, 1)[0];
             if (car.direction === 0) car.direction = boarded.dir;
@@ -268,14 +258,7 @@ export function stepSectorWorld(
         const refreshed = getAssignedPassengersForCar(world, car.id);
         const nextFloor = pickNextSectorFloor(cfg, car, refreshed);
         if (nextFloor !== null && nextFloor !== curFloor) {
-          startCarMoving(
-            sim,
-            world,
-            car,
-            curFloor,
-            nextFloor,
-            buildRoutePreview(car, refreshed)
-          );
+          startCarMoving(sim, world, car, curFloor, nextFloor, buildRoutePreview(car, refreshed));
         } else {
           car.direction = 0;
           car.state = 'IDLE';

@@ -38,8 +38,7 @@ export function assignPassengerDestinationDispatch(
     return;
   }
 
-  const estCycleTime =
-    (2 * Math.max(4, cfg.floors * 0.65)) / CRUISE_SPEED + 3.2 * stopPenalty;
+  const estCycleTime = (2 * Math.max(4, cfg.floors * 0.65)) / CRUISE_SPEED + 3.2 * stopPenalty;
 
   const totalWaiting = countTotalWaiting(world);
   const fleetCap = Math.max(1, healthyCars.length * cap);
@@ -244,16 +243,11 @@ function pullClusterBatchAtLobby(
     boardedCount++;
   }
 
-  const healthyCount = Math.max(
-    1,
-    world.cars.filter((c) => !isCarUnderFireAlarm(c)).length
-  );
+  const healthyCount = Math.max(1, world.cars.filter((c) => !isCarUnderFireAlarm(c)).length);
   const baseZoneSpan = Math.max(2, Math.ceil((cfg.floors - 1) / healthyCount));
   const lobbyHeavy = lobbyQ.length >= cap;
   const maxSpan =
-    otherReadyLobbyCars > 0 && !lobbyHeavy
-      ? Math.max(2, baseZoneSpan - 1)
-      : baseZoneSpan + 1;
+    otherReadyLobbyCars > 0 && !lobbyHeavy ? Math.max(2, baseZoneSpan - 1) : baseZoneSpan + 1;
   const maxUniqueStops =
     otherReadyLobbyCars > 0 && !lobbyHeavy
       ? Math.min(3, baseZoneSpan)
@@ -290,8 +284,7 @@ function pullClusterBatchAtLobby(
         }
       }
 
-      const distFromBand =
-        p.dest < minD ? minD - p.dest : p.dest > maxD ? p.dest - maxD : 0;
+      const distFromBand = p.dest < minD ? minD - p.dest : p.dest > maxD ? p.dest - maxD : 0;
       const score =
         (alreadyStop ? -22 : 0) +
         distFromBand * 4.5 +
@@ -334,12 +327,9 @@ function adoptDownwardEnRouteCalls(cfg: SimConfig, world: BuildingWorld, car: El
       const p = q[i];
       if (p.dir !== -1 || p.assignedCarId === car.id) continue;
 
-      const assignedCar =
-        p.assignedCarId !== null ? world.cars[p.assignedCarId] : null;
+      const assignedCar = p.assignedCarId !== null ? world.cars[p.assignedCarId] : null;
       const myEta = Math.abs(car.floor - f) / CRUISE_SPEED;
-      const otherEta = assignedCar
-        ? estimateCarEtaToFloor(cfg, assignedCar, f, -1)
-        : Infinity;
+      const otherEta = assignedCar ? estimateCarEtaToFloor(cfg, assignedCar, f, -1) : Infinity;
 
       if (myEta + 2.0 < otherEta) {
         p.assignedCarId = car.id;
@@ -478,12 +468,9 @@ function beginDestinationStop(
     }
   }
 
-  for (let i = 0; i < q.length && car.passengers.length < cap; ) {
+  for (let i = 0; i < q.length && car.passengers.length < cap;) {
     const cand = q[i];
-    if (
-      cand.assignedCarId === car.id &&
-      (car.direction === 0 || cand.dir === car.direction)
-    ) {
+    if (cand.assignedCarId === car.id && (car.direction === 0 || cand.dir === car.direction)) {
       const boarded = q.splice(i, 1)[0];
       if (car.direction === 0) car.direction = boarded.dir;
       boarded.boardTime = sim.simTime;
@@ -530,7 +517,7 @@ export function stepDestinationWorld(
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
     if (isCarUnderFireAlarm(car)) {
-      stepFireRecallCar(world, car, dt);
+      stepFireRecallCar(sim.simTime, world, car, dt);
       continue;
     }
 
@@ -542,12 +529,10 @@ export function stepDestinationWorld(
       let extraBoarded = 0;
 
       if (!car.departing && car.passengers.length < cap) {
-        for (let k = 0; k < q.length && car.passengers.length < cap; ) {
+        for (let k = 0; k < q.length && car.passengers.length < cap;) {
           const cand = q[k];
           const dirOk =
-            car.passengers.length === 0 ||
-            car.direction === 0 ||
-            cand.dir === car.direction;
+            car.passengers.length === 0 || car.direction === 0 || cand.dir === car.direction;
           if (cand.assignedCarId === car.id && dirOk) {
             const boarded = q.splice(k, 1)[0];
             if (car.direction === 0) car.direction = boarded.dir;

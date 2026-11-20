@@ -8,7 +8,11 @@ import {
   stepFireRecallCar,
 } from '../worldHelpers';
 
-function pickNextStandardFloor(cfg: SimConfig, world: BuildingWorld, car: ElevatorCar): number | null {
+function pickNextStandardFloor(
+  cfg: SimConfig,
+  world: BuildingWorld,
+  car: ElevatorCar
+): number | null {
   const floors = cfg.floors;
   const cap = cfg.carCapacity;
   const upBound = Math.ceil(car.floor - 0.02);
@@ -137,7 +141,7 @@ function beginStandardStop(
 
   const q = world.waitingQueues[floor];
   const cap = cfg.carCapacity;
-  for (let i = 0; i < q.length && car.passengers.length < cap; ) {
+  for (let i = 0; i < q.length && car.passengers.length < cap;) {
     if (car.direction === 0 || q[i].dir === car.direction) {
       const boarded = q.splice(i, 1)[0];
       if (car.direction === 0) car.direction = boarded.dir;
@@ -163,12 +167,7 @@ function beginStandardStop(
   car.state = 'DWELLING';
 }
 
-export function stepStandardWorld(
-  sim: SimState,
-  cfg: SimConfig,
-  world: BuildingWorld,
-  dt: number
-) {
+export function stepStandardWorld(sim: SimState, cfg: SimConfig, world: BuildingWorld, dt: number) {
   const cars = world.cars;
   const cap = cfg.carCapacity;
   const stopPenalty = cfg.stopPenalty;
@@ -176,7 +175,7 @@ export function stepStandardWorld(
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
     if (isCarUnderFireAlarm(car)) {
-      stepFireRecallCar(world, car, dt);
+      stepFireRecallCar(sim.simTime, world, car, dt);
       continue;
     }
 
@@ -189,7 +188,7 @@ export function stepStandardWorld(
         }
         const q = world.waitingQueues[curFloor];
         let extraBoarded = 0;
-        for (let k = 0; k < q.length && car.passengers.length < cap; ) {
+        for (let k = 0; k < q.length && car.passengers.length < cap;) {
           if (q[k].dir === car.direction) {
             const boarded = q.splice(k, 1)[0];
             boarded.boardTime = sim.simTime;

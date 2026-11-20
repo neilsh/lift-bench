@@ -1,27 +1,26 @@
 import {
   BarChart3,
   BookOpen,
-  ChevronDown,
   Crown,
   Flame,
-  Info,
   Pause,
   SlidersHorizontal,
   Sunrise,
   Sunset,
   Utensils,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import type { ComponentType } from 'react';
 import { renderSparklineCanvas } from '../engine/canvasRenderer';
-import { ALGORITHM_META, ALGORITHM_ORDER, PRESET_META } from '../engine/elevatorSim';
+import { ALGORITHM_META, PRESET_META, PRESET_ORDER } from '../engine/elevatorSim';
 import type {
-  CibseGrade,
   DispatchAlgorithm,
   DistributionMode,
   TelemetrySnapshot,
   TowerSide,
 } from '../types/simulation';
+import { computeHistoryMax } from '../utils/cibse';
+import { TowerTelemetryCard } from './TowerTelemetryCard';
 
 interface TelemetryHudProps {
   telemetry: TelemetrySnapshot;
@@ -35,8 +34,6 @@ interface TelemetryHudProps {
   onOpenGuide: (focusedAlgorithm?: DispatchAlgorithm) => void;
 }
 
-const PRESET_ORDER: DistributionMode[] = ['realistic', 'lunch', 'downpeak', 'vip', 'uniform'];
-
 const PRESET_ICONS: Record<DistributionMode, ComponentType<{ className?: string }>> = {
   realistic: Sunrise,
   lunch: Utensils,
@@ -45,22 +42,7 @@ const PRESET_ICONS: Record<DistributionMode, ComponentType<{ className?: string 
   uniform: SlidersHorizontal,
 };
 
-function getGradeClass(grade: CibseGrade): string {
-  switch (grade) {
-    case 'A':
-    case 'B':
-      return 'text-emerald-300';
-    case 'C':
-      return 'text-amber-300';
-    case 'D':
-    case 'F':
-      return 'text-rose-300';
-    default:
-      return 'text-slate-400';
-  }
-}
-
-export function TelemetryHud({
+export const TelemetryHud = memo(function TelemetryHud({
   telemetry,
   paused,
   distributionMode,
@@ -72,21 +54,21 @@ export function TelemetryHud({
   onOpenGuide,
 }: TelemetryHudProps) {
   const sparkRef = useRef<HTMLCanvasElement | null>(null);
-  const [sparkMax, setSparkMax] = useState(0);
+
+  const sparkMax = useMemo(
+    () => computeHistoryMax(telemetry.leftHistory, telemetry.rightHistory),
+    [telemetry.leftHistory, telemetry.rightHistory]
+  );
 
   useEffect(() => {
     const canvas = sparkRef.current;
     if (!canvas || canvas.offsetParent === null) return;
-    const maxQ = renderSparklineCanvas(canvas, telemetry.leftHistory, telemetry.rightHistory);
-    if (maxQ > 0) setSparkMax(maxQ);
+    renderSparklineCanvas(canvas, telemetry.leftHistory, telemetry.rightHistory);
   }, [telemetry.leftHistory, telemetry.rightHistory]);
 
   const { left, right, clockText, fireAlarmActive } = telemetry;
   const leftMeta = ALGORITHM_META[leftAlgorithm];
   const rightMeta = ALGORITHM_META[rightAlgorithm];
-
-  const leftTot = Math.max(0.1, left.avgTTD);
-  const rightTot = Math.max(0.1, right.avgTTD);
 
   let advantageText = `${rightMeta.shortName}: --% ATTD`;
   let advantageColor = 'text-slate-400';
@@ -107,7 +89,6 @@ export function TelemetryHud({
   return (
     <header className="shrink-0 bg-slate-900/95 border-b border-slate-800 px-2 sm:px-4 py-1.5 sm:py-2 z-20 shadow-lg">
       <div className="max-w-7xl mx-auto flex flex-col gap-1.5">
-        {/* Row 1: Title, Unboxed Telemetry Metadata, Guide & Metrics Triggers, and Traffic Presets */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
             <h1 className="text-xs sm:text-sm font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0">
@@ -175,7 +156,6 @@ export function TelemetryHud({
             </div>
           </div>
 
-          {/* Time-of-Day & Scenario Preset Switcher */}
           <fieldset
             aria-label="Traffic preset scenarios"
             className="m-0 w-full sm:w-auto flex items-center gap-0.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px] sm:text-[11px] overflow-x-auto no-scrollbar"
@@ -204,116 +184,15 @@ export function TelemetryHud({
           </fieldset>
         </div>
 
-        {/* Row 2: Decoupled Twin Telemetry Sections & Sparkline */}
         <div className="grid grid-cols-12 gap-1.5 sm:gap-2 items-stretch">
-          {/* LEFT TOWER TELEMETRY */}
-          <section
-            aria-label="Left tower telemetry"
-            className="col-span-6 lg:col-span-5 bg-slate-950/80 border border-slate-800/90 rounded-lg p-1.5 sm:p-2 flex flex-col justify-between gap-1 overflow-hidden"
-          >
-            <div className="flex items-center justify-between gap-1">
-              <div className="flex items-center gap-1 min-w-0">
-                <div className="relative flex items-center min-w-0">
-                  <select
-                    aria-label="Left tower dispatch algorithm"
-                    value={leftAlgorithm}
-                    onChange={(e) => onSelectAlgorithm('left', e.target.value as DispatchAlgorithm)}
-                    title={leftMeta.description}
-                    className="appearance-none bg-slate-900/90 hover:bg-slate-800/90 text-amber-200 border border-amber-500/25 hover:border-amber-400/50 rounded-md pl-2 pr-5 py-1 text-[10.5px] sm:text-xs font-semibold truncate max-w-[115px] sm:max-w-[175px] cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                  >
-                    {ALGORITHM_ORDER.map((id) => (
-                      <option key={id} value={id} className="bg-slate-900 text-slate-100">
-                        {ALGORITHM_META[id].name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    className="pointer-events-none absolute right-1.5 w-3 h-3 text-amber-300/80"
-                    aria-hidden="true"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenGuide(leftAlgorithm)}
-                  aria-label={`Explain ${leftMeta.name} algorithm`}
-                  title={`How ${leftMeta.name} works`}
-                  className="w-7 h-7 rounded-md bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-amber-300 flex items-center justify-center transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                >
-                  <Info className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
-                {left.saturated && (
-                  <span className="font-mono text-[9px] font-bold text-rose-300 shrink-0">
-                    SAT
-                  </span>
-                )}
-              </div>
+          <TowerTelemetryCard
+            side="left"
+            algorithm={leftAlgorithm}
+            stats={left}
+            onSelectAlgorithm={onSelectAlgorithm}
+            onOpenGuide={onOpenGuide}
+          />
 
-              <div className="text-right shrink-0 flex items-baseline gap-1.5">
-                <span
-                  className={`font-mono text-[10px] sm:text-xs font-bold hidden sm:inline ${getGradeClass(left.cibseGrade)}`}
-                  title={`CIBSE Guide D Grade ${left.cibseGrade}: ${left.cibseLabel}`}
-                >
-                  {left.cibseGrade}
-                </span>
-                <span className="font-mono tabular-nums text-xs sm:text-base font-bold text-amber-300">
-                  {left.avgTTD.toFixed(1)}s
-                </span>
-                <span className="text-[10px] text-slate-400 hidden md:inline">TTD</span>
-              </div>
-            </div>
-
-            <div
-              className="w-full h-2 sm:h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800"
-              title="Queue Wait / Active Travel / Stop Overhead"
-            >
-              <div
-                className="h-full bg-amber-500 transition-all duration-150"
-                style={{ width: `${(left.avgWait / leftTot) * 100}%` }}
-              />
-              <div
-                className="h-full bg-sky-500 transition-all duration-150"
-                style={{ width: `${(left.avgTravel / leftTot) * 100}%` }}
-              />
-              <div
-                className="h-full bg-rose-500 transition-all duration-150"
-                style={{ width: `${(left.avgStop / leftTot) * 100}%` }}
-              />
-            </div>
-
-            <div className="flex flex-col gap-0.5 text-[9px] sm:text-[11px] tracking-tight font-mono tabular-nums text-slate-400">
-              <div className="flex items-center justify-between gap-1">
-                <span className="whitespace-nowrap">
-                  Thru{' '}
-                  <strong className={left.saturated ? 'text-rose-400' : 'text-emerald-300'}>
-                    {left.throughput.toFixed(1)}
-                  </strong>
-                  /m
-                </span>
-                <span className="whitespace-nowrap">
-                  Stp <strong className="text-slate-200">{left.stopsPerTrip.toFixed(1)}</strong> · Q{' '}
-                  <strong className="text-amber-300">{left.waitingCount}</strong>
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-1 text-[8.5px] sm:text-[10px] text-slate-400">
-                <span className="whitespace-nowrap">
-                  Wait <strong className="text-amber-300">{Math.round(left.avgWait)}s</strong> · P95{' '}
-                  <strong className="text-slate-200">{Math.round(left.p95TTD)}s</strong>
-                  <span className="hidden sm:inline">
-                    {' '}
-                    · Int{' '}
-                    <strong className="text-slate-200">
-                      {left.lobbyInterval > 0 ? `${Math.round(left.lobbyInterval)}s` : '—'}
-                    </strong>
-                  </span>
-                </span>
-                <span className="whitespace-nowrap">
-                  Out <strong className="text-slate-200">{left.served}</strong>
-                </span>
-              </div>
-            </div>
-          </section>
-
-          {/* QUEUE SPARKLINE & LEGEND */}
           <button
             type="button"
             onClick={onOpenMetrics}
@@ -342,114 +221,15 @@ export function TelemetryHud({
             </div>
           </button>
 
-          {/* RIGHT TOWER TELEMETRY */}
-          <section
-            aria-label="Right tower telemetry"
-            className="col-span-6 lg:col-span-5 bg-slate-950/80 border border-cyan-900/50 rounded-lg p-1.5 sm:p-2 flex flex-col justify-between gap-1 overflow-hidden"
-          >
-            <div className="flex items-center justify-between gap-1">
-              <div className="flex items-center gap-1 min-w-0">
-                <div className="relative flex items-center min-w-0">
-                  <select
-                    aria-label="Right tower dispatch algorithm"
-                    value={rightAlgorithm}
-                    onChange={(e) => onSelectAlgorithm('right', e.target.value as DispatchAlgorithm)}
-                    title={rightMeta.description}
-                    className="appearance-none bg-slate-900/90 hover:bg-slate-800/90 text-cyan-200 border border-cyan-500/25 hover:border-cyan-400/50 rounded-md pl-2 pr-5 py-1 text-[10.5px] sm:text-xs font-semibold truncate max-w-[115px] sm:max-w-[175px] cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                  >
-                    {ALGORITHM_ORDER.map((id) => (
-                      <option key={id} value={id} className="bg-slate-900 text-slate-100">
-                        {ALGORITHM_META[id].name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    className="pointer-events-none absolute right-1.5 w-3 h-3 text-cyan-300/80"
-                    aria-hidden="true"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenGuide(rightAlgorithm)}
-                  aria-label={`Explain ${rightMeta.name} algorithm`}
-                  title={`How ${rightMeta.name} works`}
-                  className="w-7 h-7 rounded-md bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-cyan-300 flex items-center justify-center transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                >
-                  <Info className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
-                {right.saturated && (
-                  <span className="font-mono text-[9px] font-bold text-rose-300 shrink-0">
-                    SAT
-                  </span>
-                )}
-              </div>
-
-              <div className="text-right shrink-0 flex items-baseline gap-1.5">
-                <span
-                  className={`font-mono text-[10px] sm:text-xs font-bold hidden sm:inline ${getGradeClass(right.cibseGrade)}`}
-                  title={`CIBSE Guide D Grade ${right.cibseGrade}: ${right.cibseLabel}`}
-                >
-                  {right.cibseGrade}
-                </span>
-                <span className="font-mono tabular-nums text-xs sm:text-base font-bold text-cyan-300">
-                  {right.avgTTD.toFixed(1)}s
-                </span>
-                <span className="text-[10px] text-slate-400 hidden md:inline">TTD</span>
-              </div>
-            </div>
-
-            <div
-              className="w-full h-2 sm:h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800"
-              title="Queue Wait / Active Travel / Stop Overhead"
-            >
-              <div
-                className="h-full bg-amber-500 transition-all duration-150"
-                style={{ width: `${(right.avgWait / rightTot) * 100}%` }}
-              />
-              <div
-                className="h-full bg-sky-500 transition-all duration-150"
-                style={{ width: `${(right.avgTravel / rightTot) * 100}%` }}
-              />
-              <div
-                className="h-full bg-rose-500 transition-all duration-150"
-                style={{ width: `${(right.avgStop / rightTot) * 100}%` }}
-              />
-            </div>
-
-            <div className="flex flex-col gap-0.5 text-[9px] sm:text-[11px] tracking-tight font-mono tabular-nums text-slate-400">
-              <div className="flex items-center justify-between gap-1">
-                <span className="whitespace-nowrap">
-                  Thru{' '}
-                  <strong className={right.saturated ? 'text-rose-400' : 'text-cyan-300'}>
-                    {right.throughput.toFixed(1)}
-                  </strong>
-                  /m
-                </span>
-                <span className="whitespace-nowrap">
-                  Stp <strong className="text-slate-200">{right.stopsPerTrip.toFixed(1)}</strong> · Q{' '}
-                  <strong className="text-cyan-300">{right.waitingCount}</strong>
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-1 text-[8.5px] sm:text-[10px] text-slate-400">
-                <span className="whitespace-nowrap">
-                  Wait <strong className="text-amber-300">{Math.round(right.avgWait)}s</strong> · P95{' '}
-                  <strong className="text-slate-200">{Math.round(right.p95TTD)}s</strong>
-                  <span className="hidden sm:inline">
-                    {' '}
-                    · Int{' '}
-                    <strong className="text-slate-200">
-                      {right.lobbyInterval > 0 ? `${Math.round(right.lobbyInterval)}s` : '—'}
-                    </strong>
-                  </span>
-                </span>
-                <span className="whitespace-nowrap">
-                  Out <strong className="text-slate-200">{right.served}</strong>
-                </span>
-              </div>
-            </div>
-          </section>
+          <TowerTelemetryCard
+            side="right"
+            algorithm={rightAlgorithm}
+            stats={right}
+            onSelectAlgorithm={onSelectAlgorithm}
+            onOpenGuide={onOpenGuide}
+          />
         </div>
       </div>
     </header>
   );
-}
+});

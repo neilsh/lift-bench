@@ -1,5 +1,5 @@
 import { BookOpen, Check, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { ALGORITHM_META, ALGORITHM_ORDER } from '../engine/elevatorSim';
 import { useModalFocus } from '../hooks/useModalFocus';
 import type { DispatchAlgorithm, TowerSide } from '../types/simulation';
@@ -13,7 +13,7 @@ interface AlgorithmGuideModalProps {
   onClose: () => void;
 }
 
-export function AlgorithmGuideModal({
+export const AlgorithmGuideModal = memo(function AlgorithmGuideModal({
   open,
   leftAlgorithm,
   rightAlgorithm,
@@ -22,9 +22,10 @@ export function AlgorithmGuideModal({
   onClose,
 }: AlgorithmGuideModalProps) {
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Partial<Record<DispatchAlgorithm, HTMLElement | null>>>({});
 
-  useModalFocus(open, onClose, closeBtnRef);
+  useModalFocus(open, onClose, closeBtnRef, panelRef);
 
   useEffect(() => {
     if (!open || !focusedAlgorithm) return;
@@ -50,7 +51,10 @@ export function AlgorithmGuideModal({
         onClick={onClose}
         className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm cursor-default"
       />
-      <div className="modal-panel-anim relative w-full max-w-3xl max-h-[86dvh] bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div
+        ref={panelRef}
+        className="modal-panel-anim relative w-full max-w-3xl max-h-[86dvh] bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+      >
         <div className="shrink-0 px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-2 bg-slate-950/75">
           <div className="flex items-center gap-2.5 min-w-0">
             <BookOpen className="w-4 h-4 text-cyan-400 shrink-0" aria-hidden="true" />
@@ -62,7 +66,8 @@ export function AlgorithmGuideModal({
                 Dispatch Algorithms Guide
               </h2>
               <p className="text-[11px] text-slate-400 truncate">
-                Compare how each scheduler routes shafts, batches riders, and trades wait vs. energy.
+                Compare how each scheduler routes shafts, batches riders, and trades wait vs.
+                energy.
               </p>
             </div>
           </div>
@@ -159,14 +164,14 @@ export function AlgorithmGuideModal({
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-3.5 py-2.5 text-[11px] text-slate-300 leading-relaxed">
-            <span className="font-semibold text-slate-100">CIBSE Guide D Grading:</span>{' '}
-            Towers are graded live from <span className="font-mono text-emerald-300">A</span>{' '}
-            (Excellent: Wait ≤20s, TTD ≤45s) through{' '}
-            <span className="font-mono text-amber-300">C</span> (Fair: Wait ≤30s, TTD ≤75s) down to{' '}
-            <span className="font-mono text-rose-300">F</span> (Overloaded or saturated queue).
+            <span className="font-semibold text-slate-100">CIBSE Guide D Grading:</span> Towers are
+            graded live from <span className="font-mono text-emerald-300">A</span> (Excellent: Wait
+            ≤20s, TTD ≤45s) through <span className="font-mono text-amber-300">C</span> (Fair: Wait
+            ≤30s, TTD ≤75s) down to <span className="font-mono text-rose-300">F</span> (Overloaded
+            or saturated queue).
           </div>
         </div>
       </div>
     </dialog>
   );
-}
+});

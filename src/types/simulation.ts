@@ -1,12 +1,6 @@
 export type DistributionMode = 'realistic' | 'lunch' | 'downpeak' | 'vip' | 'uniform';
 
-export type DispatchAlgorithm =
-  | 'standard'
-  | 'nearest'
-  | 'sector'
-  | 'destination'
-  | 'eco'
-  | 'fcfs';
+export type DispatchAlgorithm = 'standard' | 'nearest' | 'sector' | 'destination' | 'eco' | 'fcfs';
 
 export type TowerSide = 'left' | 'right';
 
@@ -68,14 +62,14 @@ export interface DeliveryEffect {
   floor: number;
   count: number;
   labelPrefix: string;
-  born: number;
-  duration: number;
+  bornSimTime: number;
+  durationSimSec: number;
 }
 
 export interface FloorRipple {
   floor: number;
-  born: number;
-  duration: number;
+  bornSimTime: number;
+  durationSimSec: number;
 }
 
 export interface BuildingWorld {
@@ -101,6 +95,12 @@ export interface BuildingWorld {
   queueHistory: number[];
   lastHistorySample: number;
   deliveryEffects: DeliveryEffect[];
+}
+
+export interface ConfigFieldLimit {
+  readonly min: number;
+  readonly max: number;
+  readonly step: number;
 }
 
 export interface SimConfig {

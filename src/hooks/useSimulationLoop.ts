@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { renderSimulationCanvas } from '../engine/canvasRenderer';
 import {
   ALGORITHM_META,
+  assertNever,
   buildTelemetrySnapshot,
   createSimulation,
   DEFAULT_CONFIG,
   FIXED_DT,
   PRESET_META,
+  sanitizeSimConfig,
   spawnBurstPassengers,
   stepTwinSimulation,
   toggleFireAlarmState,
@@ -14,6 +16,7 @@ import {
 import type {
   CanvasHoverTarget,
   CanvasLayout,
+  CarState,
   DispatchAlgorithm,
   DistributionMode,
   HoverInspection,
@@ -27,7 +30,7 @@ import type {
 const INITIAL_SEED = 20261118;
 const SHAFT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
-function formatCarStateLabel(state: string): string {
+function formatCarStateLabel(state: CarState): string {
   switch (state) {
     case 'MOVING':
       return 'Moving';
@@ -38,14 +41,15 @@ function formatCarStateLabel(state: string): string {
     case 'FIRE_LOCKED':
       return 'Locked Out';
     case 'IDLE':
-    default:
       return 'Idle';
+    default:
+      return assertNever(state, 'Unhandled CarState');
   }
 }
 
 export function useSimulationLoop() {
   const [boot] = useState(() => {
-    const initialCfg: SimConfig = { ...DEFAULT_CONFIG };
+    const initialCfg: SimConfig = sanitizeSimConfig(DEFAULT_CONFIG);
     const initialSim = createSimulation(initialCfg, INITIAL_SEED, 75);
     return {
       cfg: initialCfg,
@@ -164,18 +168,6 @@ export function useSimulationLoop() {
       }
 
       if (canvasRef.current) {
-        const containerEl = containerRef.current;
-        if (containerEl) {
-          const rect = containerEl.getBoundingClientRect();
-          if (
-            rect.width > 0 &&
-            rect.height > 0 &&
-            (Math.abs(rect.width - canvasSizeRef.current.width) > 2 ||
-              Math.abs(rect.height - canvasSizeRef.current.height) > 2)
-          ) {
-            resizeCanvas();
-          }
-        }
         const nextLayout = renderSimulationCanvas(
           canvasRef.current,
           sim,
@@ -183,7 +175,8 @@ export function useSimulationLoop() {
           canvasSizeRef.current.width,
           canvasSizeRef.current.height,
           reducedMotionRef.current,
-          hoverTargetRef.current
+          hoverTargetRef.current,
+          now
         );
         if (nextLayout) layoutRef.current = nextLayout;
       }
@@ -209,7 +202,7 @@ export function useSimulationLoop() {
   const handleSelectPreset = useCallback(
     (mode: DistributionMode) => {
       if (configRef.current.distributionMode === mode) return;
-      const nextCfg: SimConfig = { ...configRef.current, distributionMode: mode };
+      const nextCfg = sanitizeSimConfig({ distributionMode: mode }, configRef.current);
       configRef.current = nextCfg;
       setConfig(nextCfg);
       simRef.current = createSimulation(nextCfg, playbackRef.current.seed, 65);
@@ -223,7 +216,7 @@ export function useSimulationLoop() {
     (side: TowerSide, algorithm: DispatchAlgorithm) => {
       const key = side === 'left' ? 'leftAlgorithm' : 'rightAlgorithm';
       if (configRef.current[key] === algorithm) return;
-      const nextCfg: SimConfig = { ...configRef.current, [key]: algorithm };
+      const nextCfg = sanitizeSimConfig({ [key]: algorithm }, configRef.current);
       configRef.current = nextCfg;
       setConfig(nextCfg);
       simRef.current = createSimulation(nextCfg, playbackRef.current.seed, 65);
@@ -284,7 +277,7 @@ export function useSimulationLoop() {
 
   const handleConfigChange = useCallback(
     (partial: Partial<SimConfig>, needsReinit: boolean) => {
-      const nextCfg: SimConfig = { ...configRef.current, ...partial };
+      const nextCfg = sanitizeSimConfig(partial, configRef.current);
       configRef.current = nextCfg;
       setConfig(nextCfg);
       if (needsReinit) {

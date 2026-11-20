@@ -15,10 +15,7 @@ import {
   stepFireRecallCar,
 } from '../worldHelpers';
 
-function claimOldestUnassignedPassenger(
-  world: BuildingWorld,
-  car: ElevatorCar
-): Passenger | null {
+function claimOldestUnassignedPassenger(world: BuildingWorld, car: ElevatorCar): Passenger | null {
   let oldest: Passenger | null = null;
   for (let f = 1; f < world.waitingQueues.length; f++) {
     const q = world.waitingQueues[f];
@@ -74,7 +71,7 @@ function beginFcfsStop(
       car.passengers.push(first);
       transfers++;
 
-      for (let i = 0; i < q.length && car.passengers.length < cap; ) {
+      for (let i = 0; i < q.length && car.passengers.length < cap;) {
         if (
           q[i].dir === car.direction &&
           (q[i].assignedCarId === null || q[i].assignedCarId === car.id)
@@ -107,12 +104,7 @@ function beginFcfsStop(
   car.state = 'DWELLING';
 }
 
-export function stepFcfsWorld(
-  sim: SimState,
-  cfg: SimConfig,
-  world: BuildingWorld,
-  dt: number
-) {
+export function stepFcfsWorld(sim: SimState, cfg: SimConfig, world: BuildingWorld, dt: number) {
   const cars = world.cars;
   const stopPenalty = cfg.stopPenalty;
 
@@ -132,7 +124,7 @@ export function stepFcfsWorld(
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
     if (isCarUnderFireAlarm(car)) {
-      stepFireRecallCar(world, car, dt);
+      stepFireRecallCar(sim.simTime, world, car, dt);
       continue;
     }
 

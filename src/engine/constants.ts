@@ -1,5 +1,6 @@
 import type {
   AlgorithmMetadata,
+  ConfigFieldLimit,
   DestinationColor,
   DispatchAlgorithm,
   DistributionMode,
@@ -8,6 +9,18 @@ import type {
 
 export const FIXED_DT = 0.05; // 50ms deterministic physics step
 export const CRUISE_SPEED = 2.4; // floors per second
+export const THROUGHPUT_WINDOW_SEC = 120;
+
+export const CONFIG_LIMITS = {
+  arrivalRate: { min: 10, max: 90, step: 2 },
+  floors: { min: 8, max: 24, step: 1 },
+  cars: { min: 2, max: 5, step: 1 },
+  stopPenalty: { min: 2, max: 10, step: 0.5 },
+  carCapacity: { min: 4, max: 16, step: 1 },
+} as const satisfies Record<
+  'arrivalRate' | 'floors' | 'cars' | 'stopPenalty' | 'carCapacity',
+  ConfigFieldLimit
+>;
 
 export const DEFAULT_CONFIG: SimConfig = {
   arrivalRate: 42,
@@ -20,13 +33,21 @@ export const DEFAULT_CONFIG: SimConfig = {
   rightAlgorithm: 'destination',
 };
 
-export const ALGORITHM_ORDER: DispatchAlgorithm[] = [
+export const ALGORITHM_ORDER: readonly DispatchAlgorithm[] = [
   'standard',
   'destination',
   'nearest',
   'sector',
   'eco',
   'fcfs',
+];
+
+export const PRESET_ORDER: readonly DistributionMode[] = [
+  'realistic',
+  'lunch',
+  'downpeak',
+  'vip',
+  'uniform',
 ];
 
 export const ALGORITHM_META: Record<DispatchAlgorithm, AlgorithmMetadata> = {
@@ -98,7 +119,8 @@ export const ALGORITHM_META: Record<DispatchAlgorithm, AlgorithmMetadata> = {
       'Strict arrival-order dispatch serving one origin-to-destination batch without pickups.',
     howItWorks:
       'Idle cars claim the oldest unassigned passenger in strict arrival order, pick up same-floor companions, and run straight to their destinations without stopping for intermediate hall calls.',
-    bestFor: 'Establishing a naive baseline to measure how much smarter collective and destination scheduling perform.',
+    bestFor:
+      'Establishing a naive baseline to measure how much smarter collective and destination scheduling perform.',
     tradeOff:
       'Heavy empty deadheading and missed en-route pickups cause rapid queue saturation under load.',
   },
@@ -145,8 +167,85 @@ export const PRESET_META: Record<
   },
 };
 
-export function nowMs(): number {
-  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+const ALGORITHM_SET = new Set<string>(ALGORITHM_ORDER);
+const PRESET_SET = new Set<string>(PRESET_ORDER);
+
+export function isDispatchAlgorithm(value: string): value is DispatchAlgorithm {
+  return ALGORITHM_SET.has(value);
+}
+
+export function isDistributionMode(value: string): value is DistributionMode {
+  return PRESET_SET.has(value);
+}
+
+export function assertNever(value: never, context = 'Unexpected value'): never {
+  throw new Error(`${context}: ${String(value)}`);
+}
+
+function clampNumericField(
+  raw: number | undefined,
+  fallback: number,
+  limit: ConfigFieldLimit,
+  integerOnly: boolean
+): number {
+  if (raw === undefined || !Number.isFinite(raw)) {
+    return fallback;
+  }
+  const clamped = Math.min(limit.max, Math.max(limit.min, raw));
+  if (integerOnly) {
+    return Math.round(clamped);
+  }
+  const steps = Math.round((clamped - limit.min) / limit.step);
+  return Math.min(limit.max, Math.max(limit.min, limit.min + steps * limit.step));
+}
+
+export function sanitizeSimConfig(
+  partial: Partial<SimConfig>,
+  base: SimConfig = DEFAULT_CONFIG
+): SimConfig {
+  const distributionMode =
+    partial.distributionMode && isDistributionMode(partial.distributionMode)
+      ? partial.distributionMode
+      : base.distributionMode;
+  const leftAlgorithm =
+    partial.leftAlgorithm && isDispatchAlgorithm(partial.leftAlgorithm)
+      ? partial.leftAlgorithm
+      : base.leftAlgorithm;
+  const rightAlgorithm =
+    partial.rightAlgorithm && isDispatchAlgorithm(partial.rightAlgorithm)
+      ? partial.rightAlgorithm
+      : base.rightAlgorithm;
+
+  return {
+    arrivalRate: clampNumericField(
+      partial.arrivalRate,
+      base.arrivalRate,
+      CONFIG_LIMITS.arrivalRate,
+      true
+    ),
+    floors: clampNumericField(partial.floors, base.floors, CONFIG_LIMITS.floors, true),
+    cars: clampNumericField(
+      partial.cars,
+      base.cars,
+      { min: 1, max: CONFIG_LIMITS.cars.max, step: CONFIG_LIMITS.cars.step },
+      true
+    ),
+    stopPenalty: clampNumericField(
+      partial.stopPenalty,
+      base.stopPenalty,
+      CONFIG_LIMITS.stopPenalty,
+      false
+    ),
+    carCapacity: clampNumericField(
+      partial.carCapacity,
+      base.carCapacity,
+      CONFIG_LIMITS.carCapacity,
+      true
+    ),
+    distributionMode,
+    leftAlgorithm,
+    rightAlgorithm,
+  };
 }
 
 export function createRng(seed: number): () => number {

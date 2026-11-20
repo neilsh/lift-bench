@@ -51,11 +51,7 @@ export function computeFloorWeights(floors: number, mode: DistributionMode) {
   return { weights, cafeteriaFloor, anchorLow, anchorHigh, hotspotFloor };
 }
 
-export function pickWeightedFloor(
-  rng: () => number,
-  weights: number[],
-  excludeFloor = -1
-): number {
+export function pickWeightedFloor(rng: () => number, weights: number[], excludeFloor = -1): number {
   let total = 0;
   for (let f = 2; f < weights.length; f++) {
     if (f !== excludeFloor) total += weights[f];
