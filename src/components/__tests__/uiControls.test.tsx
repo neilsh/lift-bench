@@ -260,7 +260,7 @@ describe('ControlDock & TelemetryHud & SimCanvasStage', () => {
     expect(githubLink.getAttribute('href')).toMatch(/^https:\/\/github\.com\//);
   });
 
-  it('supports global keyboard shortcuts in App while ignoring focused inputs and selects', async () => {
+  it('supports global keyboard shortcuts in App while respecting focused controls, open modals, and modifiers', async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -280,10 +280,29 @@ describe('ControlDock & TelemetryHud & SimCanvasStage', () => {
     await user.keyboard('h');
     expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'false');
 
+    // Focusing <canvas> or a <button> allows letter shortcuts like 'h', while Space on canvas does not toggle pause
+    const canvasEl = screen.getByLabelText(/Twin-tower elevator dispatch simulation canvas/i);
+    canvasEl.focus();
+    await user.keyboard(' ');
+    expect(screen.queryByText('Paused')).not.toBeInTheDocument();
+    await user.keyboard('h');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'true');
+
+    waitHeatBtn.focus();
+    await user.keyboard('h');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'false');
+
+    // Pressing 'h' while a modal is open does NOT toggle Wait Heat
     await user.keyboard('?');
     expect(screen.getByRole('dialog', { name: 'Keyboard Shortcuts' })).toBeInTheDocument();
+    await user.keyboard('h');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'false');
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: 'Keyboard Shortcuts' })).not.toBeInTheDocument();
+
+    // Pressing 'h' with a modifier does NOT toggle Wait Heat
+    await user.keyboard('{Control>}h{/Control}');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'false');
 
     const arrivalInput = screen.getByLabelText('Arrival Rate');
     arrivalInput.focus();
