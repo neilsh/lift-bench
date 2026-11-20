@@ -58,17 +58,21 @@ describe('Modals & ErrorBoundary', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('renders MetricsModal telemetry comparison table and traps Tab focus', async () => {
+  it('renders 4-tab Telemetry Studio MetricsModal, switches tabs/charts, pauses, and traps focus', async () => {
     const user = userEvent.setup();
-    const sim = createSimulation(DEFAULT_CONFIG, 9001, 60);
+    const sim = createSimulation(DEFAULT_CONFIG, 9001, 120);
     const snapshot = buildTelemetrySnapshot(sim, DEFAULT_CONFIG);
     const onClose = vi.fn();
+    const onTogglePause = vi.fn();
 
     render(
       <MetricsModal
         open={true}
         telemetry={snapshot}
         distributionMode="realistic"
+        config={DEFAULT_CONFIG}
+        paused={false}
+        onTogglePause={onTogglePause}
         onClose={onClose}
       />
     );
@@ -77,12 +81,38 @@ describe('Modals & ErrorBoundary', () => {
     expect(screen.getByText('CIBSE Guide D Grade')).toBeInTheDocument();
     expect(screen.getByText('Mean TTD (Total)')).toBeInTheDocument();
 
+    const dialog = screen.getByRole('dialog');
     const closeButtons = screen.getAllByLabelText('Close telemetry modal');
     const closeBtn = closeButtons[closeButtons.length - 1];
     await waitFor(() => expect(closeBtn).toHaveFocus());
 
     await user.tab();
-    expect(closeBtn).toHaveFocus();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    // Inline pause toggle
+    await user.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(onTogglePause).toHaveBeenCalledTimes(1);
+
+    // Live Trends tab & 2x2 Grid toggle
+    await user.click(screen.getByRole('tab', { name: 'Live Trends' }));
+    expect(screen.getByRole('img', { name: /time-series chart/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '2×2 Grid' }));
+    expect(screen.getAllByRole('img', { name: /time-series chart/i })).toHaveLength(4);
+
+    // Distributions tab & Histogram/CDF toggle
+    await user.click(screen.getByRole('tab', { name: 'Distributions' }));
+    expect(screen.getByRole('img', { name: /Wait time histogram chart/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cumulative CDF' }));
+    expect(screen.getByRole('img', { name: /Wait time cdf chart/i })).toBeInTheDocument();
+
+    // Matrix & Export tab & category filtering
+    await user.click(screen.getByRole('tab', { name: 'Matrix & Export' }));
+    expect(screen.getByText('Demand Saturation Ratio (ρ)')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cycle Kinematics' }));
+    expect(screen.queryByText('Demand Saturation Ratio (ρ)')).not.toBeInTheDocument();
+    expect(screen.getByText('Highest Reversal Floor (H)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export JSON' })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);

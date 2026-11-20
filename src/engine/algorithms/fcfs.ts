@@ -9,7 +9,9 @@ import {
   advanceCarTowardFloor,
   alightPassengersAtFloor,
   getAssignedPassengersForCar,
+  handleCarIdleAtFloor,
   isCarUnderFireAlarm,
+  recordCarStop,
   recordTripBoarding,
   startCarMoving,
   stepFireRecallCar,
@@ -91,11 +93,11 @@ function beginFcfsStop(
   }
 
   if (car.passengers.length > 0) {
-    recordTripBoarding(world, car);
+    recordTripBoarding(world, car, sim.simTime);
   }
 
   if (transfers > 0 || car.passengers.length > 0) {
-    car.totalStops++;
+    recordCarStop(car, floor);
   }
 
   const dwell = stopPenalty + transfers * 0.35;
@@ -146,6 +148,7 @@ export function stepFcfsWorld(sim: SimState, cfg: SimConfig, world: BuildingWorl
           car.direction = 0;
           car.state = 'IDLE';
           car.targetFloors = [];
+          handleCarIdleAtFloor(sim.simTime, world, car);
         }
       }
       continue;
@@ -185,6 +188,7 @@ export function stepFcfsWorld(sim: SimState, cfg: SimConfig, world: BuildingWorl
         car.state = 'IDLE';
         car.direction = 0;
         car.targetFloors = [];
+        handleCarIdleAtFloor(sim.simTime, world, car);
         continue;
       }
 

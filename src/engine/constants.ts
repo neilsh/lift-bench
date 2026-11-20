@@ -9,12 +9,20 @@ import type {
 
 export const FIXED_DT = 0.05; // 50ms deterministic physics step
 export const CRUISE_SPEED = 2.4; // floors per second
+export const TRANSFER_TIME_PER_PAX_SEC = 0.35; // boarding/alighting time per passenger
 export const THROUGHPUT_WINDOW_SEC = 120;
+export const HC5_WINDOW_SEC = 300; // 5-minute CIBSE handling capacity window
+export const OCCUPANTS_PER_UPPER_FLOOR = 100; // standard commercial office density
+export const HISTORY_SAMPLE_CAP = 180; // 3-minute rolling 1Hz telemetry ring buffer
+export const PASSENGER_SAMPLE_CAP = 500;
+export const ROUND_TRIP_SAMPLE_CAP = 60;
+
+export const SHAFT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
 
 export const CONFIG_LIMITS = {
   arrivalRate: { min: 10, max: 90, step: 2 },
-  floors: { min: 8, max: 24, step: 1 },
-  cars: { min: 2, max: 5, step: 1 },
+  floors: { min: 4, max: 40, step: 1 },
+  cars: { min: 1, max: 8, step: 1 },
   stopPenalty: { min: 2, max: 10, step: 0.5 },
   carCapacity: { min: 4, max: 16, step: 1 },
 } as const satisfies Record<
@@ -224,12 +232,7 @@ export function sanitizeSimConfig(
       true
     ),
     floors: clampNumericField(partial.floors, base.floors, CONFIG_LIMITS.floors, true),
-    cars: clampNumericField(
-      partial.cars,
-      base.cars,
-      { min: 1, max: CONFIG_LIMITS.cars.max, step: CONFIG_LIMITS.cars.step },
-      true
-    ),
+    cars: clampNumericField(partial.cars, base.cars, CONFIG_LIMITS.cars, true),
     stopPenalty: clampNumericField(
       partial.stopPenalty,
       base.stopPenalty,

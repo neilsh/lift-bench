@@ -218,7 +218,7 @@ export const ControlDock = memo(function ControlDock({
                 Elevator Cars
               </label>
               <span className="font-mono tabular-nums font-semibold text-cyan-300">
-                {config.cars} cars
+                {config.cars} {config.cars === 1 ? 'car' : 'cars'}
               </span>
             </div>
             <input

@@ -11,20 +11,28 @@ import {
   DEFAULT_CONFIG,
   FIXED_DT,
   getDestinationColor,
+  HC5_WINDOW_SEC,
+  HISTORY_SAMPLE_CAP,
   isDispatchAlgorithm,
   isDistributionMode,
   PRESET_META,
   PRESET_ORDER,
   sanitizeSimConfig,
-  THROUGHPUT_WINDOW_SEC,
+  SHAFT_LETTERS,
 } from './constants';
-import { buildTelemetrySnapshot, computeCibseGrade, computeWorldTelemetry } from './telemetry';
+import {
+  buildTelemetrySnapshot,
+  computeCibseBenchmark,
+  computeCibseGrade,
+  computeWorldTelemetry,
+} from './telemetry';
 import { computeFloorWeights, generatePassengerSpec } from './traffic';
 import {
   countTotalWaiting,
   createBuildingWorld,
   evacuateCarAtLobby,
   isCarUnderFireAlarm,
+  resetCarCycle,
 } from './worldHelpers';
 
 export {
@@ -32,6 +40,7 @@ export {
   ALGORITHM_ORDER,
   assertNever,
   buildTelemetrySnapshot,
+  computeCibseBenchmark,
   computeCibseGrade,
   computeFloorWeights,
   computeSectorBands,
@@ -50,6 +59,7 @@ export {
   PRESET_META,
   PRESET_ORDER,
   sanitizeSimConfig,
+  SHAFT_LETTERS,
 };
 
 function assignPassengerForWorld(
@@ -173,6 +183,7 @@ export function toggleFireAlarmState(sim: SimState, cfg: SimConfig) {
           car.state = 'FIRE_RECALL';
           car.direction = -1;
           car.targetFloors = [1];
+          resetCarCycle(car);
           world.totalMotorStarts++;
         }
       }
@@ -207,8 +218,8 @@ export function toggleFireAlarmState(sim: SimState, cfg: SimConfig) {
 }
 
 function pruneExpiredWorldArtifacts(simTime: number, world: BuildingWorld) {
-  const throughputCutoff = simTime - THROUGHPUT_WINDOW_SEC;
-  while (world.completionTimes.length > 0 && world.completionTimes[0] < throughputCutoff) {
+  const hc5Cutoff = simTime - HC5_WINDOW_SEC;
+  while (world.completionTimes.length > 0 && world.completionTimes[0] < hc5Cutoff) {
     world.completionTimes.shift();
   }
 
@@ -278,6 +289,40 @@ export function stepTwinSimulation(sim: SimState, cfg: SimConfig, dt: number) {
     if (sim.left.queueHistory.length > 90) {
       sim.left.queueHistory.shift();
       sim.right.queueHistory.shift();
+    }
+
+    const benchmark = computeCibseBenchmark(safeCfg);
+    const leftTel = computeWorldTelemetry(sim, safeCfg, sim.left, benchmark);
+    const rightTel = computeWorldTelemetry(sim, safeCfg, sim.right, benchmark);
+
+    sim.left.telemetryHistory.push({
+      simTime: secFloor,
+      queue: leftQ,
+      avgWait: leftTel.avgWait,
+      avgTransit: leftTel.avgTransit,
+      avgTTD: leftTel.avgTTD,
+      avgRTT: leftTel.avgRTT,
+      lobbyInterval: leftTel.lobbyInterval,
+      hc5Pct: leftTel.hc5Pct,
+      throughput: leftTel.throughput,
+      whPerPax: leftTel.whPerPax,
+    });
+    sim.right.telemetryHistory.push({
+      simTime: secFloor,
+      queue: rightQ,
+      avgWait: rightTel.avgWait,
+      avgTransit: rightTel.avgTransit,
+      avgTTD: rightTel.avgTTD,
+      avgRTT: rightTel.avgRTT,
+      lobbyInterval: rightTel.lobbyInterval,
+      hc5Pct: rightTel.hc5Pct,
+      throughput: rightTel.throughput,
+      whPerPax: rightTel.whPerPax,
+    });
+
+    if (sim.left.telemetryHistory.length > HISTORY_SAMPLE_CAP) {
+      sim.left.telemetryHistory.shift();
+      sim.right.telemetryHistory.shift();
     }
   }
 }

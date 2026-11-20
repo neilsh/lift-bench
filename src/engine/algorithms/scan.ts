@@ -2,7 +2,9 @@ import type { BuildingWorld, ElevatorCar, SimConfig, SimState } from '../../type
 import {
   advanceCarTowardFloor,
   alightPassengersAtFloor,
+  handleCarIdleAtFloor,
   isCarUnderFireAlarm,
+  recordCarStop,
   recordTripBoarding,
   startCarMoving,
   stepFireRecallCar,
@@ -154,11 +156,11 @@ function beginStandardStop(
   }
 
   if (car.passengers.length > 0) {
-    recordTripBoarding(world, car);
+    recordTripBoarding(world, car, sim.simTime);
   }
 
   if (transfers > 0 || car.passengers.length > 0) {
-    car.totalStops++;
+    recordCarStop(car, floor);
   }
 
   const dwell = stopPenalty + transfers * 0.35;
@@ -199,7 +201,7 @@ export function stepStandardWorld(sim: SimState, cfg: SimConfig, world: Building
           }
         }
         if (extraBoarded > 0) {
-          recordTripBoarding(world, car);
+          recordTripBoarding(world, car, sim.simTime);
           car.dwellTimer = Math.max(car.dwellTimer, extraBoarded * 0.35);
         }
       }
@@ -214,6 +216,7 @@ export function stepStandardWorld(sim: SimState, cfg: SimConfig, world: Building
           car.direction = 0;
           car.state = 'IDLE';
           car.targetFloors = [];
+          handleCarIdleAtFloor(sim.simTime, world, car);
         }
       }
       continue;
@@ -238,6 +241,7 @@ export function stepStandardWorld(sim: SimState, cfg: SimConfig, world: Building
         car.state = 'IDLE';
         car.direction = 0;
         car.targetFloors = [];
+        handleCarIdleAtFloor(sim.simTime, world, car);
         continue;
       }
 

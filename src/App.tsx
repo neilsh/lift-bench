@@ -108,6 +108,9 @@ export default function App() {
         open={metricsModalOpen}
         telemetry={telemetry}
         distributionMode={config.distributionMode}
+        config={config}
+        paused={paused}
+        onTogglePause={handleTogglePause}
         onClose={handleCloseMetrics}
       />
 

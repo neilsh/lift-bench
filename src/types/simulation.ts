@@ -8,6 +8,55 @@ export type CarState = 'IDLE' | 'MOVING' | 'DWELLING' | 'FIRE_RECALL' | 'FIRE_LO
 
 export type CibseGrade = 'A' | 'B' | 'C' | 'D' | 'F' | '—';
 
+export type CibseComplianceStatus = 'pass' | 'warn' | 'fail' | 'pending';
+
+export interface CibseComplianceBreakdown {
+  awt: CibseComplianceStatus;
+  att: CibseComplianceStatus;
+  interval: CibseComplianceStatus;
+  hc5: CibseComplianceStatus;
+}
+
+export interface CibseAnalyticalBenchmark {
+  buildingPopulation: number;
+  designLoadP: number;
+  expectedReversalRise: number;
+  expectedReversalFloor: number;
+  expectedStopsS: number;
+  theoreticalRTT: number;
+  theoreticalInterval: number;
+  theoreticalHC5Pax: number;
+  theoreticalHC5Pct: number;
+  demandHC5Pax: number;
+  demandHC5Pct: number;
+}
+
+export interface RoundTripSample {
+  rttSec: number;
+  reversalFloor: number;
+  stops: number;
+  loadFactorPct: number;
+}
+
+export interface TelemetryHistoryPoint {
+  simTime: number;
+  queue: number;
+  avgWait: number;
+  avgTransit: number;
+  avgTTD: number;
+  avgRTT: number;
+  lobbyInterval: number;
+  hc5Pct: number;
+  throughput: number;
+  whPerPax: number;
+}
+
+export interface DistributionSamples {
+  wait: number[];
+  transit: number[];
+  ttd: number[];
+}
+
 export interface AlgorithmMetadata {
   id: DispatchAlgorithm;
   name: string;
@@ -55,6 +104,11 @@ export interface ElevatorCar {
   sectorMin?: number;
   sectorMax?: number;
   batchHoldUsed?: number;
+  cycleStartTime: number | null;
+  cycleStartedAtLobby: boolean;
+  cyclePeakFloor: number;
+  cycleUpperStops: number;
+  cyclePeakLoad: number;
 }
 
 export interface DeliveryEffect {
@@ -75,6 +129,7 @@ export interface FloorRipple {
 export interface BuildingWorld {
   side: TowerSide;
   algorithm: DispatchAlgorithm;
+  carCapacity: number;
   cars: ElevatorCar[];
   waitingQueues: Passenger[][];
   completed: {
@@ -86,6 +141,8 @@ export interface BuildingWorld {
   completionTimes: number[];
   ttdSamples: number[];
   waitSamples: number[];
+  transitSamples: number[];
+  roundTripSamples: RoundTripSample[];
   lobbyDepartTimes: number[];
   totalDistanceFloors: number;
   totalMotorStarts: number;
@@ -93,6 +150,7 @@ export interface BuildingWorld {
   evacuatedCount: number;
   maxQueue: number;
   queueHistory: number[];
+  telemetryHistory: TelemetryHistoryPoint[];
   lastHistorySample: number;
   deliveryEffects: DeliveryEffect[];
 }
@@ -140,12 +198,28 @@ export interface SimState {
 export interface WorldTelemetry {
   avgTTD: number;
   avgWait: number;
+  avgTransit: number;
   avgTravel: number;
   avgStop: number;
-  p50TTD: number;
-  p95TTD: number;
+  p25Wait: number;
+  p50Wait: number;
+  p75Wait: number;
+  p90Wait: number;
   p95Wait: number;
+  p50Transit: number;
+  p95Transit: number;
+  p25TTD: number;
+  p50TTD: number;
+  p75TTD: number;
+  p90TTD: number;
+  p95TTD: number;
   maxCurrentWait: number;
+  longWait30Pct: number;
+  longWait60Pct: number;
+  avgRTT: number;
+  p95RTT: number;
+  avgReversalFloor: number;
+  avgStopsPerRoundTrip: number;
   stopsPerTrip: number;
   totalStops: number;
   avgPaxPerTrip: number;
@@ -156,9 +230,13 @@ export interface WorldTelemetry {
   maxQueue: number;
   served: number;
   throughput: number;
+  hc5Pax: number;
+  hc5Pct: number;
+  demandSaturationRatio: number;
   saturated: boolean;
   cibseGrade: CibseGrade;
   cibseLabel: string;
+  cibseCompliance: CibseComplianceBreakdown;
   lobbyInterval: number;
 }
 
@@ -173,8 +251,13 @@ export interface TelemetrySnapshot {
   rightAlgorithm: DispatchAlgorithm;
   left: WorldTelemetry;
   right: WorldTelemetry;
+  cibseBenchmark: CibseAnalyticalBenchmark;
   leftHistory: number[];
   rightHistory: number[];
+  leftSeries: TelemetryHistoryPoint[];
+  rightSeries: TelemetryHistoryPoint[];
+  leftSamples: DistributionSamples;
+  rightSamples: DistributionSamples;
 }
 
 export interface CanvasLayout {

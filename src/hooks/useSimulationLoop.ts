@@ -9,6 +9,7 @@ import {
   FIXED_DT,
   PRESET_META,
   sanitizeSimConfig,
+  SHAFT_LETTERS,
   spawnBurstPassengers,
   stepTwinSimulation,
   toggleFireAlarmState,
@@ -29,7 +30,6 @@ import type {
 } from '../types/simulation';
 
 const INITIAL_SEED = 20261118;
-const SHAFT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
 function formatCarStateLabel(state: CarState): string {
   switch (state) {

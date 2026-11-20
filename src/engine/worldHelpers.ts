@@ -7,10 +7,78 @@ import type {
   SimState,
   TowerSide,
 } from '../types/simulation';
-import { computeSectorBands, CRUISE_SPEED } from './constants';
+import {
+  computeSectorBands,
+  CRUISE_SPEED,
+  PASSENGER_SAMPLE_CAP,
+  ROUND_TRIP_SAMPLE_CAP,
+} from './constants';
 
 export function isCarUnderFireAlarm(car: ElevatorCar): boolean {
   return car.state === 'FIRE_RECALL' || car.state === 'FIRE_LOCKED';
+}
+
+export function resetCarCycle(car: ElevatorCar) {
+  car.cycleStartTime = null;
+  car.cycleStartedAtLobby = false;
+  car.cyclePeakFloor = Math.max(1, Math.round(car.floor));
+  car.cycleUpperStops = 0;
+  car.cyclePeakLoad = 0;
+}
+
+export function recordCarStop(car: ElevatorCar, floor: number) {
+  car.totalStops++;
+  if (car.cycleStartTime !== null) {
+    const rounded = Math.round(floor);
+    if (rounded > car.cyclePeakFloor) {
+      car.cyclePeakFloor = rounded;
+    }
+    if (rounded > 1) {
+      car.cycleUpperStops++;
+    }
+  }
+}
+
+export function closeCarRoundTrip(
+  simTime: number,
+  world: BuildingWorld,
+  car: ElevatorCar,
+  nominalExtraSec = 0
+) {
+  if (car.cycleStartTime === null) return;
+
+  const rttSec = simTime - car.cycleStartTime + Math.max(0, nominalExtraSec);
+  const hasPayload = car.cyclePeakLoad > 0 && car.cyclePeakFloor > 1;
+  if (hasPayload && rttSec >= 2 && rttSec <= 600) {
+    world.roundTripSamples.push({
+      rttSec,
+      reversalFloor: car.cyclePeakFloor,
+      stops: Math.max(1, car.cycleUpperStops),
+      loadFactorPct: Math.min(100, (car.cyclePeakLoad / Math.max(1, world.carCapacity)) * 100),
+    });
+    if (world.roundTripSamples.length > ROUND_TRIP_SAMPLE_CAP) {
+      world.roundTripSamples.shift();
+    }
+  }
+
+  resetCarCycle(car);
+}
+
+export function handleCarIdleAtFloor(simTime: number, world: BuildingWorld, car: ElevatorCar) {
+  if (car.cycleStartTime === null || car.passengers.length > 0) return;
+
+  if (car.cycleStartedAtLobby && car.cyclePeakFloor > 1 && car.cyclePeakLoad > 0) {
+    const nominalReturnSec = Math.max(0, car.floor - 1) / CRUISE_SPEED;
+    closeCarRoundTrip(simTime, world, car, nominalReturnSec);
+    return;
+  }
+
+  if (!car.cycleStartedAtLobby && car.cyclePeakFloor > 1 && car.cycleUpperStops >= 1) {
+    closeCarRoundTrip(simTime, world, car, 0);
+    return;
+  }
+
+  resetCarCycle(car);
 }
 
 export function createBuildingWorld(
@@ -41,6 +109,11 @@ export function createBuildingWorld(
       sectorMin: band.min,
       sectorMax: band.max,
       batchHoldUsed: 0,
+      cycleStartTime: null,
+      cycleStartedAtLobby: false,
+      cyclePeakFloor: 1,
+      cycleUpperStops: 0,
+      cyclePeakLoad: 0,
     });
   }
 
@@ -49,6 +122,7 @@ export function createBuildingWorld(
   return {
     side,
     algorithm,
+    carCapacity: cfg.carCapacity,
     cars,
     waitingQueues,
     completed: {
@@ -60,6 +134,8 @@ export function createBuildingWorld(
     completionTimes: [],
     ttdSamples: [],
     waitSamples: [],
+    transitSamples: [],
+    roundTripSamples: [],
     lobbyDepartTimes: [],
     totalDistanceFloors: 0,
     totalMotorStarts: 0,
@@ -67,12 +143,13 @@ export function createBuildingWorld(
     evacuatedCount: 0,
     maxQueue: 0,
     queueHistory: [],
+    telemetryHistory: [],
     lastHistorySample: -1,
     deliveryEffects: [],
   };
 }
 
-export function recordTripBoarding(world: BuildingWorld, car: ElevatorCar) {
+export function recordTripBoarding(world: BuildingWorld, car: ElevatorCar, simTime?: number) {
   if (car.passengers.length === 0) return;
   if (!car.inTrip) {
     car.inTrip = true;
@@ -83,6 +160,22 @@ export function recordTripBoarding(world: BuildingWorld, car: ElevatorCar) {
     world.totalBoardedOnTrips += car.passengers.length - car.tripPeakLoad;
     car.tripPeakLoad = car.passengers.length;
   }
+
+  if (simTime !== undefined) {
+    const curFloor = Math.max(1, Math.round(car.floor));
+    if (car.cycleStartTime === null) {
+      car.cycleStartTime = simTime;
+      car.cycleStartedAtLobby = curFloor === 1;
+      car.cyclePeakFloor = curFloor;
+      car.cycleUpperStops = 0;
+      car.cyclePeakLoad = car.passengers.length;
+    } else {
+      if (curFloor > car.cyclePeakFloor) car.cyclePeakFloor = curFloor;
+      if (car.passengers.length > car.cyclePeakLoad) {
+        car.cyclePeakLoad = car.passengers.length;
+      }
+    }
+  }
 }
 
 export function recordPassengerDelivery(sim: SimState, world: BuildingWorld, p: Passenger) {
@@ -90,6 +183,7 @@ export function recordPassengerDelivery(sim: SimState, world: BuildingWorld, p: 
   const directTravel = Math.abs(p.dest - p.origin) / CRUISE_SPEED;
   const totalDuration = sim.simTime - p.spawnTime;
   const stopTime = Math.max(0, totalDuration - waitTime - directTravel);
+  const transitTime = Math.max(0, totalDuration - waitTime);
 
   world.completed.count++;
   world.completed.waitSum += waitTime;
@@ -98,9 +192,11 @@ export function recordPassengerDelivery(sim: SimState, world: BuildingWorld, p: 
   world.completionTimes.push(sim.simTime);
 
   world.ttdSamples.push(totalDuration);
-  if (world.ttdSamples.length > 250) world.ttdSamples.shift();
+  if (world.ttdSamples.length > PASSENGER_SAMPLE_CAP) world.ttdSamples.shift();
   world.waitSamples.push(waitTime);
-  if (world.waitSamples.length > 250) world.waitSamples.shift();
+  if (world.waitSamples.length > PASSENGER_SAMPLE_CAP) world.waitSamples.shift();
+  world.transitSamples.push(transitTime);
+  if (world.transitSamples.length > PASSENGER_SAMPLE_CAP) world.transitSamples.shift();
 }
 
 export function recordLobbyDeparture(
@@ -127,6 +223,26 @@ export function startCarMoving(
   targetFloors: number[]
 ) {
   recordLobbyDeparture(sim, world, car, fromFloor, nextFloor);
+
+  if (fromFloor === 1 && nextFloor > 1) {
+    if (car.cycleStartTime !== null && car.cycleStartedAtLobby && car.cyclePeakFloor > 1) {
+      closeCarRoundTrip(sim.simTime, world, car, 0);
+    }
+    if (car.cycleStartTime === null) {
+      car.cycleStartTime = sim.simTime;
+      car.cycleStartedAtLobby = true;
+      car.cyclePeakFloor = Math.max(1, Math.round(nextFloor));
+      car.cycleUpperStops = 0;
+      car.cyclePeakLoad = car.passengers.length;
+    }
+  } else if (car.cycleStartTime !== null) {
+    const peak = Math.max(Math.round(car.floor), Math.round(nextFloor));
+    if (peak > car.cyclePeakFloor) car.cyclePeakFloor = peak;
+    if (car.passengers.length > car.cyclePeakLoad) {
+      car.cyclePeakLoad = car.passengers.length;
+    }
+  }
+
   car.direction = nextFloor > car.floor ? 1 : -1;
   car.state = 'MOVING';
   world.totalMotorStarts++;
@@ -171,6 +287,15 @@ export function alightPassengersAtFloor(
   if (alighted > 0) {
     addDeliveryEffect(sim.simTime, world, car.id, floor, alighted);
   }
+
+  if (car.cycleStartTime !== null) {
+    const rounded = Math.round(floor);
+    if (rounded > car.cyclePeakFloor) car.cyclePeakFloor = rounded;
+    if (rounded <= 1 && car.passengers.length === 0 && car.cyclePeakFloor > 1) {
+      closeCarRoundTrip(sim.simTime, world, car, 0);
+    }
+  }
+
   return alighted;
 }
 
@@ -183,6 +308,9 @@ export function advanceCarTowardFloor(
   const delta = targetFloor - car.floor;
   if (Math.abs(delta) < 0.02) {
     car.floor = targetFloor;
+    if (car.cycleStartTime !== null && Math.round(car.floor) > car.cyclePeakFloor) {
+      car.cyclePeakFloor = Math.round(car.floor);
+    }
     return 'ARRIVED';
   }
 
@@ -191,11 +319,17 @@ export function advanceCarTowardFloor(
   if (Math.abs(delta) <= stepDist) {
     world.totalDistanceFloors += Math.abs(delta);
     car.floor = targetFloor;
+    if (car.cycleStartTime !== null && Math.round(car.floor) > car.cyclePeakFloor) {
+      car.cyclePeakFloor = Math.round(car.floor);
+    }
     return 'ARRIVED';
   }
 
   world.totalDistanceFloors += stepDist;
   car.floor += car.direction * stepDist;
+  if (car.cycleStartTime !== null && Math.round(car.floor) > car.cyclePeakFloor) {
+    car.cyclePeakFloor = Math.round(car.floor);
+  }
   return 'MOVING';
 }
 
@@ -367,6 +501,7 @@ export function evacuateCarAtLobby(simTime: number, world: BuildingWorld, car: E
   car.tripPeakLoad = 0;
   car.batchHoldUsed = 0;
   car.targetFloors = [];
+  resetCarCycle(car);
 
   if (car.passengers.length > 0) {
     const evacCount = car.passengers.length;

@@ -5,7 +5,7 @@ import type {
   SimConfig,
   SimState,
 } from '../types/simulation';
-import { isCarUnderFireAlarm, PRESET_META } from './elevatorSim';
+import { isCarUnderFireAlarm, PRESET_META, SHAFT_LETTERS } from './elevatorSim';
 import { computeWaitHeatmapSample } from './waitHeatmap';
 
 function drawRoundedRect(
@@ -75,7 +75,6 @@ function renderBuildingTower({
   showWaitHeatmap,
 }: TowerRenderOpts) {
   const cars = world.cars;
-  const shaftLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
@@ -91,7 +90,7 @@ function renderBuildingTower({
     ctx.textBaseline = 'middle';
     ctx.fillStyle = underAlarm ? '#fda4af' : accentColor;
     ctx.globalAlpha = underAlarm ? 0.7 + alarmStrobe * 0.3 : isHoveredCar ? 1 : 0.72;
-    ctx.fillText(shaftLetters[i] || `${i + 1}`, sx + shaftW * 0.5, topPad - 8);
+    ctx.fillText(SHAFT_LETTERS[i] || `${i + 1}`, sx + shaftW * 0.5, topPad - 8);
     ctx.globalAlpha = 1;
 
     ctx.fillStyle = underAlarm
@@ -176,9 +175,9 @@ function renderBuildingTower({
     }
   }
 
-  const carMarginX = Math.max(3, shaftW * 0.12);
-  const carW = Math.max(14, shaftW - carMarginX * 2);
-  const carH = Math.max(14, floorH * 0.8);
+  const carMarginX = Math.min(shaftW * 0.18, Math.max(1.5, shaftW * 0.12));
+  const carW = Math.max(6, shaftW - carMarginX * 2);
+  const carH = Math.max(7, floorH * 0.82);
 
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
@@ -281,21 +280,21 @@ function renderBuildingTower({
 
     const paxList = car.passengers;
     if (paxList.length > 0) {
-      const cols = carW >= 26 ? 3 : 2;
+      const cols = carW >= 24 ? 3 : carW >= 14 ? 2 : 1;
       const rows = Math.ceil(paxList.length / cols);
       const dotR = Math.max(
-        1.8,
-        Math.min(3.1, (carW - 6) / (cols * 2.6), (carH - 4) / (rows * 2.6))
+        1.2,
+        Math.min(3.1, (carW - 4) / (cols * 2.5), (carH - 3) / (rows * 2.5))
       );
-      const cellW = (carW - 4) / cols;
-      const cellH = (carH - 4) / Math.max(2, rows);
+      const cellW = Math.max(2, (carW - 2) / cols);
+      const cellH = Math.max(2, (carH - 2) / Math.max(1, rows));
 
       for (let pIdx = 0; pIdx < paxList.length; pIdx++) {
         const p = paxList[pIdx];
         const col = pIdx % cols;
         const row = Math.floor(pIdx / cols);
-        const px = cx + 2 + cellW * (col + 0.5);
-        const py = cy + carH - 2 - cellH * (row + 0.5);
+        const px = cx + 1 + cellW * (col + 0.5);
+        const py = cy + carH - 1 - cellH * (row + 0.5);
 
         ctx.beginPath();
         ctx.arc(px, py, dotR, 0, Math.PI * 2);
@@ -334,8 +333,8 @@ function renderBuildingTower({
   }
 
   const maxVisibleDots = queueZoneW >= 68 ? 4 : 3;
-  const dotRadius = Math.max(2.3, Math.min(3.6, floorH * 0.16));
-  const dotSpacing = dotRadius * 2.4;
+  const dotRadius = Math.max(1.8, Math.min(3.6, floorH * 0.18));
+  const dotSpacing = dotRadius * 2.35;
   const pulsePhase = reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(nowMs * 0.01);
 
   for (let f = 1; f <= cfg.floors; f++) {
@@ -386,7 +385,7 @@ function renderBuildingTower({
       ctx.font = 'bold 9px JetBrains Mono, monospace';
       const textW = ctx.measureText(badgeText).width;
       const badgeW = Math.max(18, textW + 7);
-      const badgeH = Math.min(13, floorH * 0.72);
+      const badgeH = Math.max(8, Math.min(13, floorH * 0.78));
       const bx = queueAlignRight
         ? queueX + queueZoneW - 8 - visibleCount * dotSpacing - badgeW + 2
         : queueX + 8 + visibleCount * dotSpacing - 2;
@@ -570,10 +569,11 @@ export function renderSimulationCanvas(
       ctx.fillRect(spineX + (spineW - barW) / 2, yMid - floorH * 0.34, barW, floorH * 0.68);
     }
 
+    const spineFontPx = Math.max(7, Math.min(10, Math.floor(floorH * 0.72)));
     ctx.font =
       f === 1 || isHotspot
-        ? 'bold 10px JetBrains Mono, monospace'
-        : '10px JetBrains Mono, monospace';
+        ? `bold ${spineFontPx}px JetBrains Mono, monospace`
+        : `${spineFontPx}px JetBrains Mono, monospace`;
     ctx.fillStyle =
       f === 1
         ? sim.fireAlarmActive

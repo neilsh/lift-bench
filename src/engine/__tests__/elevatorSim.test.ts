@@ -6,6 +6,7 @@ import {
   computeCibseGrade,
   computeFloorWeights,
   computeSectorBands,
+  CONFIG_LIMITS,
   countTotalWaiting,
   createRng,
   createSimulation,
@@ -214,29 +215,31 @@ describe('Elevator Dispatch Algorithms & Engineering Telemetry', () => {
     );
 
     it.each(ALGORITHM_ORDER)(
-      'handles extreme building sizes (8fl/2cars and 24fl/5cars) safely (%s)',
+      'handles extreme building sizes (4fl/1car and 40fl/8cars) safely (%s)',
       (algo: DispatchAlgorithm) => {
         const smallCfg = makeConfig({
           leftAlgorithm: algo,
           rightAlgorithm: algo,
-          floors: 8,
-          cars: 2,
+          floors: CONFIG_LIMITS.floors.min,
+          cars: CONFIG_LIMITS.cars.min,
           carCapacity: 4,
           arrivalRate: 24,
         });
         const largeCfg = makeConfig({
           leftAlgorithm: algo,
           rightAlgorithm: algo,
-          floors: 24,
-          cars: 5,
+          floors: CONFIG_LIMITS.floors.max,
+          cars: CONFIG_LIMITS.cars.max,
           carCapacity: 16,
-          arrivalRate: 60,
+          arrivalRate: 72,
         });
 
         const smallSim = createSimulation(smallCfg, 77, 90);
-        const largeSim = createSimulation(largeCfg, 77, 90);
+        const largeSim = createSimulation(largeCfg, 77, 140);
 
+        expect(smallSim.left.cars).toHaveLength(1);
         expect(smallSim.left.completed.count).toBeGreaterThan(5);
+        expect(largeSim.left.cars).toHaveLength(8);
         expect(largeSim.left.completed.count).toBeGreaterThan(15);
       }
     );
@@ -253,10 +256,12 @@ describe('Elevator Dispatch Algorithms & Engineering Telemetry', () => {
       ]);
 
       for (const [floors, cars] of [
+        [4, 1],
         [8, 2],
         [14, 3],
         [18, 4],
         [24, 5],
+        [40, 8],
       ] as const) {
         const b = computeSectorBands(floors, cars);
         expect(b).toHaveLength(cars);

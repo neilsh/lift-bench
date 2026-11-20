@@ -3,8 +3,8 @@ import { getDestinationColor } from './constants';
 
 export function computeFloorWeights(floors: number, mode: DistributionMode) {
   const weights = Array.from({ length: floors + 1 }, () => 0);
-  const cafeteriaFloor = Math.max(3, Math.floor(floors * 0.55));
-  const anchorLow = Math.max(3, Math.floor(floors * 0.35));
+  const cafeteriaFloor = Math.max(3, Math.min(floors, Math.floor(floors * 0.55)));
+  const anchorLow = Math.max(2, Math.min(floors - 1, Math.floor(floors * 0.35)));
   const anchorHigh = Math.min(floors - 1, anchorLow + 1);
   let hotspotFloor = cafeteriaFloor;
 

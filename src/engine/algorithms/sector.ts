@@ -10,7 +10,9 @@ import {
   alightPassengersAtFloor,
   buildRoutePreview,
   getAssignedPassengersForCar,
+  handleCarIdleAtFloor,
   isCarUnderFireAlarm,
+  recordCarStop,
   recordTripBoarding,
   startCarMoving,
   stepFireRecallCar,
@@ -176,11 +178,11 @@ function beginSectorStop(
   }
 
   if (car.passengers.length > 0) {
-    recordTripBoarding(world, car);
+    recordTripBoarding(world, car, sim.simTime);
   }
 
   if (transfers > 0 || car.passengers.length > 0) {
-    car.totalStops++;
+    recordCarStop(car, floor);
   }
 
   const dwell = stopPenalty + transfers * 0.35;
@@ -239,7 +241,7 @@ export function stepSectorWorld(sim: SimState, cfg: SimConfig, world: BuildingWo
           }
         }
         if (extraBoarded > 0) {
-          recordTripBoarding(world, car);
+          recordTripBoarding(world, car, sim.simTime);
           car.dwellTimer = Math.max(car.dwellTimer, extraBoarded * 0.35);
         }
       }
@@ -265,6 +267,7 @@ export function stepSectorWorld(sim: SimState, cfg: SimConfig, world: BuildingWo
           car.departing = false;
           car.departFloor = -1;
           car.targetFloors = [];
+          handleCarIdleAtFloor(sim.simTime, world, car);
         }
       }
       continue;
@@ -305,6 +308,7 @@ export function stepSectorWorld(sim: SimState, cfg: SimConfig, world: BuildingWo
         car.departing = false;
         car.departFloor = -1;
         car.targetFloors = [];
+        handleCarIdleAtFloor(sim.simTime, world, car);
         continue;
       }
 
@@ -319,6 +323,7 @@ export function stepSectorWorld(sim: SimState, cfg: SimConfig, world: BuildingWo
           car.state = 'IDLE';
           car.direction = 0;
           car.targetFloors = [];
+          handleCarIdleAtFloor(sim.simTime, world, car);
         }
       }
     }
