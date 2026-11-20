@@ -3,6 +3,7 @@ import { memo, useEffect, useRef } from 'react';
 import { ALGORITHM_META, ALGORITHM_ORDER } from '../engine/elevatorSim';
 import { useModalFocus } from '../hooks/useModalFocus';
 import type { DispatchAlgorithm, TowerSide } from '../types/simulation';
+import { InfoPopover } from './InfoPopover';
 
 interface AlgorithmGuideModalProps {
   open: boolean;
@@ -163,12 +164,15 @@ export const AlgorithmGuideModal = memo(function AlgorithmGuideModal({
             })}
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-3.5 py-2.5 text-[11px] text-slate-300 leading-relaxed">
-            <span className="font-semibold text-slate-100">CIBSE Guide D Grading:</span> Towers are
-            graded live from <span className="font-mono text-emerald-300">A</span> (Excellent: Wait
-            ≤20s, TTD ≤45s) through <span className="font-mono text-amber-300">C</span> (Fair: Wait
-            ≤30s, TTD ≤75s) down to <span className="font-mono text-rose-300">F</span> (Overloaded
-            or saturated queue).
+          <div className="rounded-xl border border-slate-800 bg-slate-950/70 px-3.5 py-2.5 text-[11px] text-slate-300 leading-relaxed flex items-start justify-between gap-2">
+            <div>
+              <span className="font-semibold text-slate-100">CIBSE Guide D Grading:</span> Towers
+              are graded live from <span className="font-mono text-emerald-300">A</span> (Excellent:
+              Wait ≤20s, TTD ≤45s) through <span className="font-mono text-amber-300">C</span>{' '}
+              (Fair: Wait ≤30s, TTD ≤75s) down to <span className="font-mono text-rose-300">F</span>{' '}
+              (Overloaded or saturated queue).
+            </div>
+            <InfoPopover topic="cibseGrade" size="xs" />
           </div>
         </div>
       </div>

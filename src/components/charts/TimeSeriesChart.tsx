@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import type { KeyboardEvent, PointerEvent } from 'react';
+import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import type { TelemetryHistoryPoint } from '../../types/simulation';
 import { computeNiceAxisMax, formatClockSeconds } from '../../utils/cibse';
 
@@ -25,6 +25,7 @@ interface TimeSeriesChartProps {
   onHoverIndexChange: (index: number | null) => void;
   fireAlarmActive?: boolean;
   lowerIsBetter?: boolean;
+  infoSlot?: ReactNode;
 }
 
 const REF_STROKE: Record<NonNullable<ChartReferenceLine['tone']>, string> = {
@@ -50,6 +51,7 @@ export function TimeSeriesChart({
   onHoverIndexChange,
   fireAlarmActive = false,
   lowerIsBetter = true,
+  infoSlot,
 }: TimeSeriesChartProps) {
   const gradId = useId();
   const count = Math.min(leftSeries.length, rightSeries.length);
@@ -150,9 +152,10 @@ export function TimeSeriesChart({
   return (
     <div className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 sm:p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-xs sm:text-sm font-semibold text-slate-100 truncate">{title}</span>
           <span className="text-[11px] font-mono text-slate-400 shrink-0">{unit}</span>
+          {infoSlot}
         </div>
 
         <div className="flex items-center gap-2.5 text-[11px] font-mono tabular-nums flex-wrap">

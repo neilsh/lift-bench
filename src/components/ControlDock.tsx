@@ -13,6 +13,7 @@ import {
 import { memo } from 'react';
 import { CONFIG_LIMITS } from '../engine/elevatorSim';
 import type { PlaybackState, SimConfig } from '../types/simulation';
+import { InfoPopover } from './InfoPopover';
 
 interface ControlDockProps {
   config: SimConfig;
@@ -94,38 +95,54 @@ export const ControlDock = memo(function ControlDock({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              aria-pressed={showWaitHeatmap}
-              onClick={onToggleWaitHeatmap}
-              title="Toggle floor wait-time heatmap (emerald to crimson by longest current passenger wait)"
-              className={
-                showWaitHeatmap
-                  ? 'h-10 px-2.5 sm:px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/30 border border-emerald-400/60 text-emerald-200 font-semibold text-[11px] sm:text-xs transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
-                  : 'h-10 px-2.5 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-slate-200 font-medium text-[11px] sm:text-xs transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400'
-              }
-            >
-              <Thermometer className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>Wait Heat</span>
-            </button>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                type="button"
+                aria-pressed={showWaitHeatmap}
+                onClick={onToggleWaitHeatmap}
+                title="Toggle floor wait-time heatmap (emerald to crimson by longest current passenger wait)"
+                className={
+                  showWaitHeatmap
+                    ? 'h-10 px-2.5 sm:px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/30 border border-emerald-400/60 text-emerald-200 font-semibold text-[11px] sm:text-xs transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
+                    : 'h-10 px-2.5 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-slate-200 font-medium text-[11px] sm:text-xs transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400'
+                }
+              >
+                <Thermometer className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>Wait Heat</span>
+              </button>
+              <InfoPopover
+                topic="waitHeatmap"
+                ariaLabel="About floor thermal wait overlay"
+                size="xs"
+                className="hidden lg:inline-flex"
+              />
+            </div>
 
-            <button
-              type="button"
-              onClick={onToggleFireAlarm}
-              title="Pull the building Fire Alarm to recall all elevators nonstop to Floor 1 and lock them out of service"
-              className={
-                fireAlarmActive
-                  ? 'h-10 px-2.5 sm:px-3 rounded-lg bg-rose-600 hover:bg-rose-500 active:bg-rose-400 border border-rose-300 text-white font-bold text-[11px] sm:text-xs shadow-[0_0_14px_rgba(244,63,94,0.55)] transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300'
-                  : 'h-10 px-2.5 sm:px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 border border-rose-500/50 text-rose-300 font-semibold text-[11px] sm:text-xs transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400'
-              }
-            >
-              {fireAlarmActive ? (
-                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              ) : (
-                <Flame className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              )}
-              <span>{fireAlarmActive ? 'Clear Alarm' : 'Fire Alarm'}</span>
-            </button>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={onToggleFireAlarm}
+                title="Pull the building Fire Alarm to recall all elevators nonstop to Floor 1 and lock them out of service"
+                className={
+                  fireAlarmActive
+                    ? 'h-10 px-2.5 sm:px-3 rounded-lg bg-rose-600 hover:bg-rose-500 active:bg-rose-400 border border-rose-300 text-white font-bold text-[11px] sm:text-xs shadow-[0_0_14px_rgba(244,63,94,0.55)] transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300'
+                    : 'h-10 px-2.5 sm:px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 border border-rose-500/50 text-rose-300 font-semibold text-[11px] sm:text-xs transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400'
+                }
+              >
+                {fireAlarmActive ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                ) : (
+                  <Flame className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                )}
+                <span>{fireAlarmActive ? 'Clear Alarm' : 'Fire Alarm'}</span>
+              </button>
+              <InfoPopover
+                topic="fireAlarm"
+                ariaLabel="About Phase I emergency lobby recall"
+                size="xs"
+                className="hidden lg:inline-flex"
+              />
+            </div>
 
             <button
               type="button"
@@ -172,9 +189,12 @@ export const ControlDock = memo(function ControlDock({
         >
           <div className="flex flex-col justify-center min-h-[44px]">
             <div className="flex items-center justify-between text-[11px]">
-              <label htmlFor="sliderArrival" className="text-slate-300 font-medium">
-                Arrival Rate
-              </label>
+              <span className="inline-flex items-center gap-1">
+                <label htmlFor="sliderArrival" className="text-slate-300 font-medium">
+                  Arrival Rate
+                </label>
+                <InfoPopover topic="arrivalRate" size="xs" />
+              </span>
               <span className="font-mono tabular-nums font-semibold text-cyan-300">
                 {config.arrivalRate} pax/m
               </span>
@@ -193,9 +213,12 @@ export const ControlDock = memo(function ControlDock({
 
           <div className="flex flex-col justify-center min-h-[44px]">
             <div className="flex items-center justify-between text-[11px]">
-              <label htmlFor="sliderFloors" className="text-slate-300 font-medium">
-                Building Floors
-              </label>
+              <span className="inline-flex items-center gap-1">
+                <label htmlFor="sliderFloors" className="text-slate-300 font-medium">
+                  Building Floors
+                </label>
+                <InfoPopover topic="floors" size="xs" />
+              </span>
               <span className="font-mono tabular-nums font-semibold text-cyan-300">
                 {config.floors} fl
               </span>
@@ -214,9 +237,12 @@ export const ControlDock = memo(function ControlDock({
 
           <div className="flex flex-col justify-center min-h-[44px]">
             <div className="flex items-center justify-between text-[11px]">
-              <label htmlFor="sliderCars" className="text-slate-300 font-medium">
-                Elevator Cars
-              </label>
+              <span className="inline-flex items-center gap-1">
+                <label htmlFor="sliderCars" className="text-slate-300 font-medium">
+                  Elevator Cars
+                </label>
+                <InfoPopover topic="cars" size="xs" />
+              </span>
               <span className="font-mono tabular-nums font-semibold text-cyan-300">
                 {config.cars} {config.cars === 1 ? 'car' : 'cars'}
               </span>
@@ -235,9 +261,12 @@ export const ControlDock = memo(function ControlDock({
 
           <div className="flex flex-col justify-center min-h-[44px]">
             <div className="flex items-center justify-between text-[11px]">
-              <label htmlFor="sliderStopPenalty" className="text-slate-300 font-medium">
-                Stop Penalty
-              </label>
+              <span className="inline-flex items-center gap-1">
+                <label htmlFor="sliderStopPenalty" className="text-slate-300 font-medium">
+                  Stop Penalty
+                </label>
+                <InfoPopover topic="stopPenalty" size="xs" />
+              </span>
               <span className="font-mono tabular-nums font-semibold text-cyan-300">
                 {config.stopPenalty.toFixed(1)}s
               </span>
@@ -256,9 +285,12 @@ export const ControlDock = memo(function ControlDock({
 
           <div className="flex flex-col justify-center min-h-[44px]">
             <div className="flex items-center justify-between text-[11px]">
-              <label htmlFor="sliderCapacity" className="text-slate-300 font-medium">
-                Car Capacity
-              </label>
+              <span className="inline-flex items-center gap-1">
+                <label htmlFor="sliderCapacity" className="text-slate-300 font-medium">
+                  Car Capacity
+                </label>
+                <InfoPopover topic="carCapacity" size="xs" />
+              </span>
               <span className="font-mono tabular-nums font-semibold text-cyan-300">
                 {config.carCapacity} pax
               </span>

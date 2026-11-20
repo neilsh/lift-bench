@@ -13,6 +13,7 @@ import type {
   HoverInspection,
   TelemetrySnapshot,
 } from '../types/simulation';
+import { InfoPopover } from './InfoPopover';
 
 interface SimCanvasStageProps {
   containerRef: RefObject<HTMLDivElement | null>;
@@ -167,6 +168,12 @@ export const SimCanvasStage = memo(function SimCanvasStage({
                 />
                 <span className="text-rose-300">45s+</span>
               </span>
+              <InfoPopover
+                topic="waitHeatmap"
+                ariaLabel="About floor thermal wait scale"
+                size="xs"
+                className="pointer-events-auto"
+              />
             </>
           )}
         </div>

@@ -3,6 +3,7 @@ import { memo } from 'react';
 import { ALGORITHM_META, ALGORITHM_ORDER, isDispatchAlgorithm } from '../engine/elevatorSim';
 import type { DispatchAlgorithm, TowerSide, WorldTelemetry } from '../types/simulation';
 import { getCibseGradeColorClass } from '../utils/cibse';
+import { InfoPopover } from './InfoPopover';
 
 interface TowerTelemetryCardProps {
   side: TowerSide;
@@ -103,23 +104,29 @@ export const TowerTelemetryCard = memo(function TowerTelemetryCard({
             <Info className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
           {stats.saturated && (
-            <span className="font-mono text-[9px] font-bold text-rose-300 shrink-0">SAT</span>
+            <span className="inline-flex items-center gap-0.5 shrink-0">
+              <span className="font-mono text-[9px] font-bold text-rose-300">SAT</span>
+              <InfoPopover topic="saturation" size="xs" />
+            </span>
           )}
         </div>
 
-        <div className="text-right shrink-0 flex items-baseline gap-1.5">
-          <span
-            className={`font-mono text-[10px] sm:text-xs font-bold hidden sm:inline ${getCibseGradeColorClass(stats.cibseGrade)}`}
-            title={`CIBSE Guide D Grade ${stats.cibseGrade}: ${stats.cibseLabel}`}
-          >
-            {stats.cibseGrade}
-          </span>
-          <span
-            className={`font-mono tabular-nums text-xs sm:text-base font-bold ${theme.ttdTone}`}
-          >
-            {stats.avgTTD.toFixed(1)}s
-          </span>
-          <span className="text-[10px] text-slate-400 hidden md:inline">TTD</span>
+        <div className="text-right shrink-0 flex items-center gap-1">
+          <div className="flex items-baseline gap-1.5">
+            <span
+              className={`font-mono text-[10px] sm:text-xs font-bold hidden sm:inline ${getCibseGradeColorClass(stats.cibseGrade)}`}
+              title={`CIBSE Guide D Grade ${stats.cibseGrade}: ${stats.cibseLabel}`}
+            >
+              {stats.cibseGrade}
+            </span>
+            <span
+              className={`font-mono tabular-nums text-xs sm:text-base font-bold ${theme.ttdTone}`}
+            >
+              {stats.avgTTD.toFixed(1)}s
+            </span>
+            <span className="text-[10px] text-slate-400 hidden md:inline">TTD</span>
+          </div>
+          <InfoPopover topic="cibseGrade" size="xs" className="hidden sm:inline-flex" />
         </div>
       </div>
 
@@ -143,12 +150,15 @@ export const TowerTelemetryCard = memo(function TowerTelemetryCard({
 
       <div className="flex flex-col gap-0.5 text-[9px] sm:text-[11px] tracking-tight font-mono tabular-nums text-slate-400">
         <div className="flex items-center justify-between gap-1">
-          <span className="whitespace-nowrap">
-            Thru{' '}
-            <strong className={stats.saturated ? 'text-rose-400' : theme.thruTone}>
-              {stats.throughput.toFixed(1)}
-            </strong>
-            /m
+          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+            <span>
+              Thru{' '}
+              <strong className={stats.saturated ? 'text-rose-400' : theme.thruTone}>
+                {stats.throughput.toFixed(1)}
+              </strong>
+              /m
+            </span>
+            <InfoPopover topic="throughput" size="xs" className="hidden md:inline-flex" />
           </span>
           <span className="whitespace-nowrap">
             Stp <strong className="text-slate-200">{stats.stopsPerTrip.toFixed(1)}</strong> · Q{' '}
@@ -156,16 +166,19 @@ export const TowerTelemetryCard = memo(function TowerTelemetryCard({
           </span>
         </div>
         <div className="flex items-center justify-between gap-1 text-[8.5px] sm:text-[10px] text-slate-400">
-          <span className="whitespace-nowrap">
-            Wait <strong className="text-amber-300">{Math.round(stats.avgWait)}s</strong> · P95{' '}
-            <strong className="text-slate-200">{Math.round(stats.p95TTD)}s</strong>
-            <span className="hidden sm:inline">
-              {' '}
-              · Int{' '}
-              <strong className="text-slate-200">
-                {stats.lobbyInterval > 0 ? `${Math.round(stats.lobbyInterval)}s` : '—'}
-              </strong>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+            <span>
+              Wait <strong className="text-amber-300">{Math.round(stats.avgWait)}s</strong> · P95{' '}
+              <strong className="text-slate-200">{Math.round(stats.p95TTD)}s</strong>
+              <span className="hidden sm:inline">
+                {' '}
+                · Int{' '}
+                <strong className="text-slate-200">
+                  {stats.lobbyInterval > 0 ? `${Math.round(stats.lobbyInterval)}s` : '—'}
+                </strong>
+              </span>
             </span>
+            <InfoPopover topic="interval" size="xs" className="hidden md:inline-flex" />
           </span>
           <span className="whitespace-nowrap">
             Out <strong className="text-slate-200">{stats.served}</strong>

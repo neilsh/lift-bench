@@ -20,6 +20,7 @@ import type {
   TowerSide,
 } from '../types/simulation';
 import { computeHistoryMax } from '../utils/cibse';
+import { InfoPopover } from './InfoPopover';
 import { TowerTelemetryCard } from './TowerTelemetryCard';
 
 interface TelemetryHudProps {
@@ -125,11 +126,14 @@ export const TelemetryHud = memo(function TelemetryHud({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <span
-              className={`font-mono text-[11px] sm:text-xs font-semibold tabular-nums whitespace-nowrap ${advantageColor}`}
-              title={`${rightMeta.name} vs ${leftMeta.name} average time to destination`}
-            >
-              {advantageText}
+            <span className="inline-flex items-center gap-1">
+              <span
+                className={`font-mono text-[11px] sm:text-xs font-semibold tabular-nums whitespace-nowrap ${advantageColor}`}
+                title={`${rightMeta.name} vs ${leftMeta.name} average time to destination`}
+              >
+                {advantageText}
+              </span>
+              <InfoPopover topic="advantageDelta" size="xs" />
             </span>
             <span className="text-slate-700 hidden sm:inline" aria-hidden="true">
               ·
@@ -156,32 +160,35 @@ export const TelemetryHud = memo(function TelemetryHud({
             </div>
           </div>
 
-          <fieldset
-            aria-label="Traffic preset scenarios"
-            className="m-0 w-full sm:w-auto flex items-center gap-0.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px] sm:text-[11px] overflow-x-auto no-scrollbar"
-          >
-            {PRESET_ORDER.map((mode) => {
-              const meta = PRESET_META[mode];
-              const Icon = PRESET_ICONS[mode];
-              const active = distributionMode === mode;
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => onSelectPreset(mode)}
-                  aria-pressed={active}
-                  className={`shrink-0 px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
-                    active
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                      : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                  }`}
-                >
-                  <Icon className="w-3 h-3 shrink-0" aria-hidden="true" />
-                  <span>{meta.shortLabel}</span>
-                </button>
-              );
-            })}
-          </fieldset>
+          <div className="w-full sm:w-auto flex items-center gap-1">
+            <fieldset
+              aria-label="Traffic preset scenarios"
+              className="m-0 flex-1 sm:flex-initial flex items-center gap-0.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px] sm:text-[11px] overflow-x-auto no-scrollbar"
+            >
+              {PRESET_ORDER.map((mode) => {
+                const meta = PRESET_META[mode];
+                const Icon = PRESET_ICONS[mode];
+                const active = distributionMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => onSelectPreset(mode)}
+                    aria-pressed={active}
+                    className={`shrink-0 px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                      active
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    }`}
+                  >
+                    <Icon className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    <span>{meta.shortLabel}</span>
+                  </button>
+                );
+              })}
+            </fieldset>
+            <InfoPopover topic="trafficPresets" size="xs" className="hidden sm:inline-flex" />
+          </div>
         </div>
 
         <div className="grid grid-cols-12 gap-1.5 sm:gap-2 items-stretch">

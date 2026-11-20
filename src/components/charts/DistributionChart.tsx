@@ -1,4 +1,4 @@
-import type { KeyboardEvent, PointerEvent } from 'react';
+import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { buildDistributionBins, computeNiceAxisMax } from '../../utils/cibse';
 
 interface DistributionChartProps {
@@ -10,6 +10,7 @@ interface DistributionChartProps {
   rightSamples: number[];
   hoveredBin: number | null;
   onHoverBinChange: (index: number | null) => void;
+  infoSlot?: ReactNode;
 }
 
 const WAIT_CUTOFFS = [
@@ -33,6 +34,7 @@ export function DistributionChart({
   rightSamples,
   hoveredBin,
   onHoverBinChange,
+  infoSlot,
 }: DistributionChartProps) {
   const binWidth = metric === 'wait' ? 5 : 10;
   const binCount = 13;
@@ -95,7 +97,7 @@ export function DistributionChart({
   return (
     <div className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 sm:p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span className="text-xs sm:text-sm font-semibold text-slate-100">
             {metric === 'wait' ? 'Passenger Wait Time' : 'Total Time to Destination'} ·{' '}
             {mode === 'histogram' ? 'Frequency Histogram' : 'Cumulative CDF'}
@@ -103,6 +105,7 @@ export function DistributionChart({
           <span className="text-[11px] font-mono text-slate-400">
             n={leftSamples.length}/{rightSamples.length}
           </span>
+          {infoSlot}
         </div>
 
         <div className="flex items-center gap-3 text-[11px] font-mono tabular-nums flex-wrap">
