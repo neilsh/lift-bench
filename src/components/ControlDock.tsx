@@ -1,3 +1,14 @@
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Flame,
+  Pause,
+  Play,
+  RotateCcw,
+  SlidersHorizontal,
+  Zap,
+} from 'lucide-react';
 import type { PlaybackState, SimConfig } from '../types/simulation';
 
 interface ControlDockProps {
@@ -34,27 +45,35 @@ export function ControlDock({
   return (
     <footer className="shrink-0 bg-slate-900/95 border-t border-slate-800 z-30 shadow-[0_-8px_24px_rgba(0,0,0,0.45)]">
       <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-2.5 flex flex-col gap-2">
-        {/* Transport Bar */}
-        <div className="flex items-center justify-between gap-1 sm:gap-2 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <div className="flex items-center justify-between gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={onTogglePause}
-              className="h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-[11px] sm:text-xs font-semibold text-slate-100 flex items-center gap-1 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              aria-label={paused ? 'Play simulation' : 'Pause simulation'}
+              className="h-10 px-2.5 sm:px-3.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-xs font-semibold text-slate-100 flex items-center gap-1.5 transition-colors shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
             >
-              <span aria-hidden="true">{paused ? '▶' : '⏸'}</span>
+              {paused ? (
+                <Play className="w-3.5 h-3.5" aria-hidden="true" />
+              ) : (
+                <Pause className="w-3.5 h-3.5" aria-hidden="true" />
+              )}
               <span className="hidden sm:inline">{paused ? 'Play' : 'Pause'}</span>
             </button>
 
-            <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 h-9 sm:h-10 shrink-0">
+            <fieldset
+              aria-label="Simulation playback speed"
+              className="m-0 flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 h-10 shrink-0"
+            >
               {SPEEDS.map((s) => {
                 const active = speed === s;
                 return (
                   <button
                     key={s}
                     type="button"
+                    aria-pressed={active}
                     onClick={() => onSelectSpeed(s)}
-                    className={`h-full px-1.5 sm:px-2.5 rounded-md font-mono text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                    className={`h-full px-2 sm:px-2.5 rounded-md font-mono text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
                       active
                         ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                         : 'text-slate-400 hover:text-white border border-transparent'
@@ -64,29 +83,34 @@ export function ControlDock({
                   </button>
                 );
               })}
-            </div>
+            </fieldset>
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={onToggleFireAlarm}
               title="Pull the building Fire Alarm to recall all elevators nonstop to Floor 1 and lock them out of service"
               className={
                 fireAlarmActive
-                  ? 'h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-rose-600 hover:bg-rose-500 active:bg-rose-400 border border-rose-300 text-white font-bold text-[10.5px] sm:text-xs shadow-[0_0_14px_rgba(244,63,94,0.55)] transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300'
-                  : 'h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 border border-rose-500/50 text-rose-300 font-semibold text-[10.5px] sm:text-xs transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400'
+                  ? 'h-10 px-2.5 sm:px-3 rounded-lg bg-rose-600 hover:bg-rose-500 active:bg-rose-400 border border-rose-300 text-white font-bold text-[11px] sm:text-xs shadow-[0_0_14px_rgba(244,63,94,0.55)] transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300'
+                  : 'h-10 px-2.5 sm:px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 border border-rose-500/50 text-rose-300 font-semibold text-[11px] sm:text-xs transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400'
               }
             >
-              <span aria-hidden="true">{fireAlarmActive ? '✅' : '🚨'}</span>
+              {fireAlarmActive ? (
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              ) : (
+                <Flame className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              )}
               <span>{fireAlarmActive ? 'Clear Alarm' : 'Fire Alarm'}</span>
             </button>
 
             <button
               type="button"
               onClick={onBurst}
-              className="h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-400 text-slate-950 font-bold text-[10.5px] sm:text-xs shadow-sm transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+              className="h-10 px-2.5 sm:px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-400 text-slate-950 font-bold text-[11px] sm:text-xs shadow-sm transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
             >
+              <Zap className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span>
                 +12<span className="hidden sm:inline"> Burst</span>
               </span>
@@ -96,26 +120,29 @@ export function ControlDock({
               type="button"
               onClick={onReset}
               title="Reset simulation with new seed"
-              className="h-9 sm:h-10 px-2 sm:px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-[10.5px] sm:text-xs font-medium text-slate-200 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              className="h-10 px-2.5 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-[11px] sm:text-xs font-medium text-slate-200 flex items-center gap-1.5 transition-colors shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
             >
-              Reset
+              <RotateCcw className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span className="hidden sm:inline">Reset</span>
             </button>
 
             <button
               type="button"
               onClick={onToggleDrawer}
               aria-expanded={drawerOpen}
-              className="md:hidden h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 text-[10.5px] sm:text-xs font-semibold text-cyan-300 flex items-center gap-1 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              className="md:hidden h-10 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 text-[11px] font-semibold text-cyan-300 flex items-center gap-1 transition-colors shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
             >
+              <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span>Sliders</span>
-              <span className="text-[10px]" aria-hidden="true">
-                {drawerOpen ? '▼' : '▲'}
-              </span>
+              {drawerOpen ? (
+                <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+              ) : (
+                <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+              )}
             </button>
           </div>
         </div>
 
-        {/* 5 Core Parameter Sliders */}
         <div
           className={`${
             drawerOpen ? 'grid' : 'hidden'

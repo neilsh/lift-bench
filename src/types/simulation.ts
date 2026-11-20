@@ -12,6 +12,18 @@ export type TowerSide = 'left' | 'right';
 
 export type CarState = 'IDLE' | 'MOVING' | 'DWELLING' | 'FIRE_RECALL' | 'FIRE_LOCKED';
 
+export type CibseGrade = 'A' | 'B' | 'C' | 'D' | 'F' | '—';
+
+export interface AlgorithmMetadata {
+  id: DispatchAlgorithm;
+  name: string;
+  shortName: string;
+  description: string;
+  howItWorks: string;
+  bestFor: string;
+  tradeOff: string;
+}
+
 export interface DestinationColor {
   fill: string;
   stroke: string;
@@ -80,6 +92,7 @@ export interface BuildingWorld {
   completionTimes: number[];
   ttdSamples: number[];
   waitSamples: number[];
+  lobbyDepartTimes: number[];
   totalDistanceFloors: number;
   totalMotorStarts: number;
   totalBoardedOnTrips: number;
@@ -144,6 +157,9 @@ export interface WorldTelemetry {
   served: number;
   throughput: number;
   saturated: boolean;
+  cibseGrade: CibseGrade;
+  cibseLabel: string;
+  lobbyInterval: number;
 }
 
 export interface TelemetrySnapshot {
@@ -166,8 +182,47 @@ export interface CanvasLayout {
   H: number;
   topPad: number;
   botPad: number;
+  usableH: number;
+  leftQueueX: number;
+  leftBankX: number;
   spineX: number;
   spineW: number;
+  rightBankX: number;
+  rightQueueX: number;
+  bankW: number;
+  shaftW: number;
+  queueZoneW: number;
   floorH: number;
   floors: number;
+  cars: number;
 }
+
+export type CanvasHoverTarget =
+  | { kind: 'car'; side: TowerSide; carId: number }
+  | { kind: 'floor'; side: TowerSide; floor: number }
+  | { kind: 'spine'; floor: number };
+
+export type HoverInspection =
+  | {
+      kind: 'car';
+      side: TowerSide;
+      shaftLetter: string;
+      stateLabel: string;
+      floor: number;
+      load: number;
+      capacity: number;
+      targetFloors: number[];
+    }
+  | {
+      kind: 'floor';
+      side: TowerSide;
+      floor: number;
+      waitingCount: number;
+      longestWaitSec: number;
+    }
+  | {
+      kind: 'spine';
+      floor: number;
+      leftWaiting: number;
+      rightWaiting: number;
+    };

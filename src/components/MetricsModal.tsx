@@ -1,7 +1,10 @@
+import { BarChart3, Flame, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { ALGORITHM_META, PRESET_META } from '../engine/elevatorSim';
+import type { ReactNode } from 'react';
 import { renderModalHistoryChart } from '../engine/canvasRenderer';
-import type { DistributionMode, TelemetrySnapshot } from '../types/simulation';
+import { ALGORITHM_META, PRESET_META } from '../engine/elevatorSim';
+import { useModalFocus } from '../hooks/useModalFocus';
+import type { CibseGrade, DistributionMode, TelemetrySnapshot } from '../types/simulation';
 
 interface MetricsModalProps {
   open: boolean;
@@ -31,6 +34,21 @@ function formatDelta(
   return { text, className };
 }
 
+function getGradeTextColor(grade: CibseGrade): string {
+  switch (grade) {
+    case 'A':
+    case 'B':
+      return 'text-emerald-300';
+    case 'C':
+      return 'text-amber-300';
+    case 'D':
+    case 'F':
+      return 'text-rose-300';
+    default:
+      return 'text-slate-400';
+  }
+}
+
 export function MetricsModal({
   open,
   telemetry,
@@ -38,16 +56,10 @@ export function MetricsModal({
   onClose,
 }: MetricsModalProps) {
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const [chartMax, setChartMax] = useState(0);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleKey = (ev: KeyboardEvent) => {
-      if (ev.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [open, onClose]);
+  useModalFocus(open, onClose, closeBtnRef);
 
   useEffect(() => {
     if (!open || !chartCanvasRef.current) return;
@@ -69,13 +81,15 @@ export function MetricsModal({
   const leftTot = Math.max(0.1, left.avgTTD);
   const rightTot = Math.max(0.1, right.avgTTD);
 
-  let verdictContent: React.ReactNode = 'Collecting steady-state samples...';
+  let verdictContent: ReactNode = 'Collecting steady-state samples...';
   if (fireAlarmActive) {
     verdictContent = (
-      <>
-        <span className="text-rose-300 font-semibold">🚨 Fire Alarm Active:</span> All elevators
-        recalled nonstop to Floor 1 &amp; locked out of service.
-      </>
+      <span className="inline-flex items-center gap-1.5 text-rose-300 font-semibold">
+        <Flame className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <span>
+          Fire Alarm Active: All elevators recalled nonstop to Floor 1 &amp; locked out of service.
+        </span>
+      </span>
     );
   } else if (left.avgTTD > 1 && right.avgTTD > 1) {
     const ttdPct = Math.round(((right.avgTTD - left.avgTTD) / left.avgTTD) * 100);
@@ -121,6 +135,12 @@ export function MetricsModal({
 
   const rows: Array<[string, string, string, { text: string; className: string }]> = [
     [
+      'CIBSE Guide D Grade',
+      `Grade ${left.cibseGrade} (${left.cibseLabel})`,
+      `Grade ${right.cibseGrade} (${right.cibseLabel})`,
+      { text: '—', className: 'text-slate-500' },
+    ],
+    [
       'Mean TTD (Total)',
       `${left.avgTTD.toFixed(1)}s`,
       `${right.avgTTD.toFixed(1)}s`,
@@ -149,6 +169,14 @@ export function MetricsModal({
       `${left.maxCurrentWait.toFixed(0)}s`,
       `${right.maxCurrentWait.toFixed(0)}s`,
       formatDelta(left.maxCurrentWait, right.maxCurrentWait, true, 's'),
+    ],
+    [
+      'Lobby Dispatch Interval',
+      left.lobbyInterval > 0 ? `${left.lobbyInterval.toFixed(1)}s` : '—',
+      right.lobbyInterval > 0 ? `${right.lobbyInterval.toFixed(1)}s` : '—',
+      left.lobbyInterval > 0 && right.lobbyInterval > 0
+        ? formatDelta(left.lobbyInterval, right.lobbyInterval, true)
+        : { text: '—', className: 'text-slate-500' },
     ],
     [
       'Throughput (120s)',
@@ -195,24 +223,23 @@ export function MetricsModal({
   ];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4"
-      role="dialog"
+    <dialog
+      open
       aria-modal="true"
       aria-labelledby="metricsModalTitle"
+      className="fixed inset-0 z-50 m-0 flex h-full max-h-none w-full max-w-none items-center justify-center border-0 bg-transparent p-2.5 sm:p-4 text-inherit"
     >
-      <div
-        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Close telemetry modal"
         onClick={onClose}
-        aria-hidden="true"
+        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm cursor-default"
       />
-      <div className="modal-panel-anim relative w-full max-w-2xl max-h-[86dvh] bg-slate-900/95 border border-slate-700/90 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-        {/* Modal Header */}
+      <div className="modal-panel-anim relative w-full max-w-2xl max-h-[86dvh] bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         <div className="shrink-0 px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-2 bg-slate-950/70">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-base" aria-hidden="true">
-              📊
-            </span>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <BarChart3 className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
             <div className="min-w-0">
               <h2
                 id="metricsModalTitle"
@@ -220,26 +247,25 @@ export function MetricsModal({
               >
                 Live Dispatch Telemetry
               </h2>
-              <p className="text-[10px] sm:text-xs text-slate-400 truncate">
+              <p className="text-[11px] text-slate-400 truncate">
                 {fireAlarmActive
-                  ? '🚨 FIRE ALARM ACTIVE · Phase I Lobby Recall Across All Shafts'
+                  ? 'Fire Alarm Active · Phase I Lobby Recall Across All Shafts'
                   : meta.desc}
               </p>
             </div>
           </div>
           <button
+            ref={closeBtnRef}
             type="button"
             onClick={onClose}
             aria-label="Close telemetry modal"
-            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center font-bold text-base border border-slate-700 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            className="w-10 h-10 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center border border-slate-700 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
-            ✕
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
-        {/* Scrollable Modal Body */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col gap-3">
-          {/* Live Verdict Banner */}
           <div className="px-3 py-2 rounded-xl bg-slate-950/90 border border-slate-800 text-xs text-slate-200 flex items-center justify-between gap-2 flex-wrap">
             <span className="font-medium">{verdictContent}</span>
             <span className="font-mono tabular-nums text-[11px] text-slate-400">
@@ -247,26 +273,34 @@ export function MetricsModal({
             </span>
           </div>
 
-          {/* Active Algorithms Summary */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
             <div className="bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2">
-              <div className="font-semibold text-amber-300">{leftMeta.name} (Left)</div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-amber-300">{leftMeta.name} (Left)</span>
+                <span className={`font-mono font-bold ${getGradeTextColor(left.cibseGrade)}`}>
+                  Grade {left.cibseGrade} · {left.cibseLabel}
+                </span>
+              </div>
               <p className="text-slate-400 text-[10.5px] leading-snug mt-0.5">
                 {leftMeta.description}
               </p>
             </div>
             <div className="bg-slate-950/70 border border-cyan-900/50 rounded-xl px-3 py-2">
-              <div className="font-semibold text-cyan-300">{rightMeta.name} (Right)</div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-cyan-300">{rightMeta.name} (Right)</span>
+                <span className={`font-mono font-bold ${getGradeTextColor(right.cibseGrade)}`}>
+                  Grade {right.cibseGrade} · {right.cibseLabel}
+                </span>
+              </div>
               <p className="text-slate-400 text-[10.5px] leading-snug mt-0.5">
                 {rightMeta.description}
               </p>
             </div>
           </div>
 
-          {/* Expanded Live Queue History Chart */}
           <div className="bg-slate-950/85 border border-slate-800 rounded-xl p-2.5 sm:p-3 flex flex-col gap-1.5">
             <div className="flex items-center justify-between text-[10px] sm:text-xs font-mono tabular-nums">
-              <span className="text-slate-300 font-semibold">WAITING QUEUE TREND (90s)</span>
+              <span className="text-slate-300 font-semibold">Waiting Queue Trend (90s)</span>
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1 text-amber-300">
                   <i className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
@@ -276,19 +310,20 @@ export function MetricsModal({
                   <i className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />
                   {rightMeta.shortName}
                 </span>
-                <span className="text-slate-500">
-                  Max <strong className="text-slate-300">{chartMax}</strong>
+                <span className="text-slate-400">
+                  Max <strong className="text-slate-200">{chartMax}</strong>
                 </span>
               </div>
             </div>
             <canvas ref={chartCanvasRef} className="w-full h-24 sm:h-28 block" />
           </div>
 
-          {/* Side-by-Side Time Decomposition */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="bg-slate-950/85 border border-slate-800 rounded-xl p-2.5 flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs gap-2">
-                <span className="font-semibold text-amber-300 truncate">{leftMeta.shortName} Split</span>
+                <span className="font-semibold text-amber-300 truncate">
+                  {leftMeta.shortName} Split
+                </span>
                 <span className="font-mono tabular-nums text-[10px] text-slate-400 shrink-0">
                   W {left.avgWait.toFixed(1)}s · R {left.avgTravel.toFixed(1)}s · S{' '}
                   {left.avgStop.toFixed(1)}s
@@ -312,7 +347,9 @@ export function MetricsModal({
 
             <div className="bg-slate-950/85 border border-cyan-900/50 rounded-xl p-2.5 flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs gap-2">
-                <span className="font-semibold text-cyan-300 truncate">{rightMeta.shortName} Split</span>
+                <span className="font-semibold text-cyan-300 truncate">
+                  {rightMeta.shortName} Split
+                </span>
                 <span className="font-mono tabular-nums text-[10px] text-slate-400 shrink-0">
                   W {right.avgWait.toFixed(1)}s · R {right.avgTravel.toFixed(1)}s · S{' '}
                   {right.avgStop.toFixed(1)}s
@@ -335,11 +372,10 @@ export function MetricsModal({
             </div>
           </div>
 
-          {/* Detailed Engineering Metrics Table */}
           <div className="bg-slate-950/85 border border-slate-800 rounded-xl overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-slate-400 bg-slate-900/70">
+                <tr className="border-b border-slate-800 text-[10px] sm:text-[11px] font-mono tracking-wider text-slate-400 bg-slate-900/70">
                   <th className="py-2 px-3">Metric</th>
                   <th className="py-2 px-2 text-right text-amber-300">{leftMeta.shortName}</th>
                   <th className="py-2 px-2 text-right text-cyan-300">{rightMeta.shortName}</th>
@@ -362,12 +398,12 @@ export function MetricsModal({
           </div>
 
           <p className="text-[10px] sm:text-[11px] text-slate-400 text-center">
-            Tip: Tap any floor number on the center spine to spawn a{' '}
-            <span className="text-cyan-300 font-mono">+4</span> burst on that exact floor. Red
-            pulsing rings indicate riders waiting &gt;40s.
+            Tip: Click any floor number on the center spine to spawn a{' '}
+            <span className="text-cyan-300 font-mono">+4</span> burst on that floor. Red rings
+            indicate riders waiting &gt;40s.
           </p>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

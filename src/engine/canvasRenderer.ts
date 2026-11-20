@@ -1,5 +1,6 @@
 import type {
   BuildingWorld,
+  CanvasHoverTarget,
   CanvasLayout,
   SimConfig,
   SimState,
@@ -51,6 +52,8 @@ interface TowerRenderOpts {
   accentColor: string;
   nowMs: number;
   alarmStrobe: number;
+  reducedMotion: boolean;
+  hoverTarget: CanvasHoverTarget | null;
 }
 
 function renderBuildingTower({
@@ -71,6 +74,8 @@ function renderBuildingTower({
   accentColor,
   nowMs,
   alarmStrobe,
+  reducedMotion,
+  hoverTarget,
 }: TowerRenderOpts) {
   const cars = world.cars;
   const shaftLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -79,26 +84,36 @@ function renderBuildingTower({
     const car = cars[i];
     const sx = bankX + i * shaftW;
     const underAlarm = isCarUnderFireAlarm(car);
+    const isHoveredCar =
+      hoverTarget?.kind === 'car' &&
+      hoverTarget.side === world.side &&
+      hoverTarget.carId === car.id;
 
     ctx.font = 'bold 9px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = underAlarm ? '#fda4af' : accentColor;
-    ctx.globalAlpha = underAlarm ? 0.7 + alarmStrobe * 0.3 : 0.72;
+    ctx.globalAlpha = underAlarm ? 0.7 + alarmStrobe * 0.3 : isHoveredCar ? 1 : 0.72;
     ctx.fillText(shaftLetters[i] || `${i + 1}`, sx + shaftW * 0.5, topPad - 8);
     ctx.globalAlpha = 1;
 
     ctx.fillStyle = underAlarm
       ? `rgba(136, 19, 55, ${0.14 + alarmStrobe * 0.12})`
-      : i % 2 === 0
-        ? 'rgba(15, 23, 42, 0.48)'
-        : 'rgba(15, 23, 42, 0.26)';
+      : isHoveredCar
+        ? world.side === 'left'
+          ? 'rgba(251, 191, 36, 0.08)'
+          : 'rgba(34, 211, 238, 0.09)'
+        : i % 2 === 0
+          ? 'rgba(15, 23, 42, 0.48)'
+          : 'rgba(15, 23, 42, 0.26)';
     ctx.fillRect(sx + 1, topPad, shaftW - 2, usableH);
 
     ctx.strokeStyle = underAlarm
       ? `rgba(244, 63, 94, ${0.32 + alarmStrobe * 0.35})`
-      : 'rgba(51, 65, 85, 0.35)';
-    ctx.lineWidth = 1;
+      : isHoveredCar
+        ? accentColor
+        : 'rgba(51, 65, 85, 0.35)';
+    ctx.lineWidth = isHoveredCar ? 1.4 : 1;
     ctx.strokeRect(Math.round(sx + 1) + 0.5, topPad + 0.5, Math.round(shaftW - 2), usableH - 1);
 
     if (underAlarm) {
@@ -107,7 +122,6 @@ function renderBuildingTower({
     }
 
     if (!underAlarm) {
-      // Draw subtle dedicated vertical zone highlight when Static Zoning is active
       if (
         world.algorithm === 'sector' &&
         car.sectorMin !== undefined &&
@@ -292,7 +306,7 @@ function renderBuildingTower({
       continue;
     }
     const ex = bankX + eff.carId * shaftW + shaftW * 0.5;
-    const ey = getFloorCenterY(eff.floor) - age * 16;
+    const ey = getFloorCenterY(eff.floor) - (reducedMotion ? 0 : age * 16);
     ctx.font = 'bold 9px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -310,9 +324,19 @@ function renderBuildingTower({
   const maxVisibleDots = queueZoneW >= 68 ? 4 : 3;
   const dotRadius = Math.max(2.3, Math.min(3.6, floorH * 0.16));
   const dotSpacing = dotRadius * 2.4;
-  const pulsePhase = 0.5 + 0.5 * Math.sin(nowMs * 0.01);
+  const pulsePhase = reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(nowMs * 0.01);
 
   for (let f = 1; f <= cfg.floors; f++) {
+    const isHoveredFloor =
+      hoverTarget?.kind === 'floor' &&
+      hoverTarget.side === world.side &&
+      hoverTarget.floor === f;
+    if (isHoveredFloor) {
+      const yTop = getFloorBottomY(f) - floorH;
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+      ctx.fillRect(queueX, yTop + 1, queueZoneW, floorH - 2);
+    }
+
     const q = world.waitingQueues[f];
     if (q.length === 0) continue;
 
@@ -376,7 +400,9 @@ export function renderSimulationCanvas(
   sim: SimState,
   cfg: SimConfig,
   logicalW: number,
-  logicalH: number
+  logicalH: number,
+  reducedMotion = false,
+  hoverTarget: CanvasHoverTarget | null = null
 ): CanvasLayout | null {
   const ctx = canvas.getContext('2d');
   if (!ctx || logicalW <= 0 || logicalH <= 0) return null;
@@ -416,14 +442,23 @@ export function renderSimulationCanvas(
     H,
     topPad,
     botPad,
+    usableH,
+    leftQueueX,
+    leftBankX,
     spineX,
     spineW,
+    rightBankX,
+    rightQueueX,
+    bankW,
+    shaftW,
+    queueZoneW,
     floorH,
     floors,
+    cars: numCars,
   };
 
   const nowMs = performance.now();
-  const alarmStrobe = 0.5 + 0.5 * Math.sin(nowMs * 0.012);
+  const alarmStrobe = reducedMotion ? 0.65 : 0.5 + 0.5 * Math.sin(nowMs * 0.012);
 
   const bgGrad = ctx.createRadialGradient(
     W * 0.5,
@@ -448,6 +483,11 @@ export function renderSimulationCanvas(
   for (let f = 1; f <= floors; f++) {
     const yBot = getFloorBottomY(f);
     const yTop = yBot - floorH;
+
+    if (hoverTarget?.kind === 'spine' && hoverTarget.floor === f) {
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
+      ctx.fillRect(sidePad, yTop, W - sidePad * 2, floorH);
+    }
 
     if (cfg.distributionMode !== 'uniform' && f === sim.hotspotFloor) {
       ctx.fillStyle =
@@ -556,6 +596,8 @@ export function renderSimulationCanvas(
     accentColor: '#fbbf24',
     nowMs,
     alarmStrobe,
+    reducedMotion,
+    hoverTarget,
   });
 
   renderBuildingTower({
@@ -576,6 +618,8 @@ export function renderSimulationCanvas(
     accentColor: '#22d3ee',
     nowMs,
     alarmStrobe,
+    reducedMotion,
+    hoverTarget,
   });
 
   return layout;

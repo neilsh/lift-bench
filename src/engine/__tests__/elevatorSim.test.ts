@@ -3,8 +3,11 @@ import {
   ALGORITHM_META,
   ALGORITHM_ORDER,
   buildTelemetrySnapshot,
+  computeCibseGrade,
+  computeFloorWeights,
   computeSectorBands,
   countTotalWaiting,
+  createRng,
   createSimulation,
   DEFAULT_CONFIG,
   FIXED_DT,
@@ -34,16 +37,79 @@ function advanceSeconds(
   }
 }
 
-describe('Elevator Dispatch Algorithms', () => {
-  it('registers metadata for every dispatch algorithm', () => {
+describe('Elevator Dispatch Algorithms & Engineering Telemetry', () => {
+  it('registers complete guide metadata for every dispatch algorithm', () => {
     expect(ALGORITHM_ORDER).toHaveLength(6);
     for (const algo of ALGORITHM_ORDER) {
-      expect(ALGORITHM_META[algo]).toBeDefined();
-      expect(ALGORITHM_META[algo].id).toBe(algo);
-      expect(ALGORITHM_META[algo].name.length).toBeGreaterThan(2);
-      expect(ALGORITHM_META[algo].shortName.length).toBeGreaterThan(1);
-      expect(ALGORITHM_META[algo].description.length).toBeGreaterThan(10);
+      const meta = ALGORITHM_META[algo];
+      expect(meta).toBeDefined();
+      expect(meta.id).toBe(algo);
+      expect(meta.name.length).toBeGreaterThan(2);
+      expect(meta.shortName.length).toBeGreaterThan(1);
+      expect(meta.description.length).toBeGreaterThan(10);
+      expect(meta.howItWorks.length).toBeGreaterThan(20);
+      expect(meta.bestFor.length).toBeGreaterThan(10);
+      expect(meta.tradeOff.length).toBeGreaterThan(10);
     }
+  });
+
+  describe('PRNG & Traffic Weights', () => {
+    it('produces deterministic Mulberry32 sequences bounded in [0, 1)', () => {
+      const rngA = createRng(98765);
+      const rngB = createRng(98765);
+      for (let i = 0; i < 50; i++) {
+        const a = rngA();
+        const b = rngB();
+        expect(a).toBe(b);
+        expect(a).toBeGreaterThanOrEqual(0);
+        expect(a).toBeLessThan(1);
+      }
+    });
+
+    it('computes valid floor weights and hotspot floors across all presets', () => {
+      const uniform = computeFloorWeights(14, 'uniform');
+      expect(uniform.hotspotFloor).toBe(-1);
+      for (let f = 2; f <= 14; f++) {
+        expect(uniform.weights[f]).toBe(1);
+      }
+
+      const vip = computeFloorWeights(14, 'vip');
+      expect(vip.hotspotFloor).toBe(14);
+      expect(vip.weights[14]).toBeGreaterThan(vip.weights[2]);
+
+      const lunch = computeFloorWeights(14, 'lunch');
+      expect(lunch.hotspotFloor).toBe(lunch.cafeteriaFloor);
+      expect(lunch.weights[lunch.cafeteriaFloor]).toBeGreaterThan(lunch.weights[2]);
+    });
+  });
+
+  describe('CIBSE Guide D Grading & Lobby Dispatch Interval', () => {
+    it('maps AWT, ATTD, and saturation to exact CIBSE Guide D grades A–F', () => {
+      expect(computeCibseGrade(0, 0, false, 0)).toEqual({ grade: '—', label: 'Pending' });
+      expect(computeCibseGrade(18, 42, false, 20)).toEqual({ grade: 'A', label: 'Excellent' });
+      expect(computeCibseGrade(24, 58, false, 20)).toEqual({ grade: 'B', label: 'Good' });
+      expect(computeCibseGrade(29, 72, false, 20)).toEqual({ grade: 'C', label: 'Fair' });
+      expect(computeCibseGrade(36, 82, false, 20)).toEqual({ grade: 'D', label: 'Poor' });
+      expect(computeCibseGrade(48, 88, false, 20)).toEqual({ grade: 'F', label: 'Overloaded' });
+      expect(computeCibseGrade(15, 38, true, 20)).toEqual({ grade: 'F', label: 'Overloaded' });
+    });
+
+    it('records rolling lobby dispatch interval during steady-state service', () => {
+      const cfg = makeConfig({
+        leftAlgorithm: 'standard',
+        rightAlgorithm: 'destination',
+        arrivalRate: 48,
+        floors: 14,
+        cars: 4,
+      });
+      const sim = createSimulation(cfg, 20261118, 90);
+      const snap = buildTelemetrySnapshot(sim, cfg);
+
+      expect(snap.left.lobbyInterval).toBeGreaterThan(1);
+      expect(snap.right.lobbyInterval).toBeGreaterThan(1);
+      expect(['A', 'B', 'C', 'D', 'F']).toContain(snap.left.cibseGrade);
+      expect(['A', 'B', 'C', 'D', 'F']).toContain(snap.right.cibseGrade);
+    });
   });
 
   describe('Determinism & Twin Symmetry', () => {
@@ -64,13 +130,13 @@ describe('Elevator Dispatch Algorithms', () => {
         const snapA = buildTelemetrySnapshot(simA, cfg);
         const snapB = buildTelemetrySnapshot(simB, cfg);
 
-        // Twin towers running identical algorithms must match identically
         expect(snapA.left.served).toBe(snapA.right.served);
         expect(snapA.left.avgTTD).toBeCloseTo(snapA.right.avgTTD, 8);
         expect(snapA.left.totalStops).toBe(snapA.right.totalStops);
         expect(snapA.left.waitingCount).toBe(snapA.right.waitingCount);
+        expect(snapA.left.lobbyInterval).toBeCloseTo(snapA.right.lobbyInterval, 8);
+        expect(snapA.left.cibseGrade).toBe(snapA.right.cibseGrade);
 
-        // Separate runs with same seed must also match identically
         expect(snapA.left.served).toBe(snapB.left.served);
         expect(snapA.left.avgTTD).toBeCloseTo(snapB.left.avgTTD, 8);
         expect(snapA.left.whPerPax).toBeCloseTo(snapB.left.whPerPax, 8);
@@ -128,7 +194,6 @@ describe('Elevator Dispatch Algorithms', () => {
         });
 
         const sim = createSimulation(cfg, 424242, 0);
-        // Disable background arrivals after spawning an explicit burst
         sim.nextSpawnTime = Number.POSITIVE_INFINITY;
         spawnBurstPassengers(sim, cfg, 16, 1);
         spawnBurstPassengers(sim, cfg, 8, 9);
@@ -187,7 +252,6 @@ describe('Elevator Dispatch Algorithms', () => {
         { min: 11, max: 14 },
       ]);
 
-      // Verify contiguous non-overlapping coverage [2..floors] across multiple building sizes
       for (const [floors, cars] of [
         [8, 2],
         [14, 3],
@@ -300,7 +364,6 @@ describe('Elevator Dispatch Algorithms', () => {
       const sim = createSimulation(cfg, 99, 0);
       sim.nextSpawnTime = Number.POSITIVE_INFINITY;
 
-      // Spawn a passenger at Floor 1 going to Floor 12
       sim.left.waitingQueues[1].push({
         id: 1,
         spawnTime: 0,
@@ -313,7 +376,6 @@ describe('Elevator Dispatch Algorithms', () => {
         stopOverhead: 0,
       });
 
-      // Spawn a later passenger on intermediate Floor 5 going to Floor 10
       sim.left.waitingQueues[5].push({
         id: 2,
         spawnTime: 1,
@@ -326,18 +388,15 @@ describe('Elevator Dispatch Algorithms', () => {
         stopOverhead: 0,
       });
 
-      // Advance until passenger 1 is delivered
       let deliveredFirst = false;
       advanceSeconds(sim, cfg, 30, () => {
         if (sim.left.completed.count === 1 && !deliveredFirst) {
           deliveredFirst = true;
-          // Intermediate floor 5 passenger must still be waiting while car delivered passenger 1 straight to 12
           expect(sim.left.waitingQueues[5].length).toBe(1);
         }
       });
 
       expect(deliveredFirst).toBe(true);
-      // Eventually passenger 2 is also picked up and delivered
       advanceSeconds(sim, cfg, 40);
       expect(sim.left.completed.count).toBe(2);
     });
@@ -357,11 +416,9 @@ describe('Elevator Dispatch Algorithms', () => {
 
         const sim = createSimulation(cfg, 8080, 60);
 
-        // Pull Fire Alarm
         toggleFireAlarmState(sim, cfg);
         expect(sim.fireAlarmActive).toBe(true);
 
-        // Allow ample time for all cars to descend nonstop to Floor 1
         advanceSeconds(sim, cfg, 25);
 
         for (const car of sim.left.cars) {
@@ -372,7 +429,6 @@ describe('Elevator Dispatch Algorithms', () => {
 
         const servedBeforeClear = sim.left.completed.count;
 
-        // Clear Fire Alarm and verify normal service resumes
         toggleFireAlarmState(sim, cfg);
         expect(sim.fireAlarmActive).toBe(false);
 
