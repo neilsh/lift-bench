@@ -10,7 +10,7 @@ Instead of guessing, I vibe-coded a side-by-side simulation where two identical 
 
 ## Features
 
-- **Synchronized Twin-Tower Benchmark** — Both towers share identical building parameters and deterministic seeded passenger arrivals (`50 ms` fixed-timestep physics) for an apples-to-apples comparison.
+- **Synchronized Two-Tower Benchmark** — Both towers share identical building parameters and deterministic seeded passenger arrivals (`50 ms` fixed-timestep physics) for an apples-to-apples comparison.
 - **6 Dispatch Algorithms** — Swap either tower's controller at any time and compare any pair head-to-head.
 - **5 Traffic Scenarios** — Switch between realistic commercial office traffic profiles or inject `+12 Burst` surges and click any floor on the canvas to spawn passengers on demand.
 - **Live Visual Canvas & Thermal Overlay** — Color-coded passenger destinations, real-time shaft motion, hover inspection on cars and floors, and a toggleable floor wait-time heatmap (`0s` emerald to `45s+` crimson).
