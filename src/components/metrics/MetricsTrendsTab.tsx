@@ -5,7 +5,7 @@ import { TimeSeriesChart } from '../charts/TimeSeriesChart';
 import { InfoPopover } from '../InfoPopover';
 import type { TrendMetricId } from './metricsConfig';
 import {
-  GRID_CHANNEL_IDS,
+  GRID_CHANNELS,
   TREND_CHANNELS,
   buildReferenceLinesByMetric,
   summarizeChannel,
@@ -41,12 +41,10 @@ export const MetricsTrendsTab = memo(function MetricsTrendsTab({
   );
 
   const activeChannel = TREND_CHANNELS.find((c) => c.id === selectedMetric) ?? TREND_CHANNELS[0];
-  const leftFocusStats = summarizeChannel(leftSeries, activeChannel.accessor);
-  const rightFocusStats = summarizeChannel(rightSeries, activeChannel.accessor);
-
-  const gridChannels = GRID_CHANNEL_IDS.map(
-    (id) => TREND_CHANNELS.find((c) => c.id === id) ?? TREND_CHANNELS[0]
-  );
+  const leftFocusStats =
+    trendsLayout === 'single' ? summarizeChannel(leftSeries, activeChannel.accessor) : null;
+  const rightFocusStats =
+    trendsLayout === 'single' ? summarizeChannel(rightSeries, activeChannel.accessor) : null;
 
   return (
     <>
@@ -125,7 +123,7 @@ export const MetricsTrendsTab = memo(function MetricsTrendsTab({
         </div>
       </div>
 
-      {trendsLayout === 'single' ? (
+      {trendsLayout === 'single' && leftFocusStats && rightFocusStats ? (
         <>
           <TimeSeriesChart
             title={activeChannel.title}
@@ -171,7 +169,7 @@ export const MetricsTrendsTab = memo(function MetricsTrendsTab({
         </>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-          {gridChannels.map((ch) => (
+          {GRID_CHANNELS.map((ch) => (
             <TimeSeriesChart
               key={ch.id}
               title={ch.title}

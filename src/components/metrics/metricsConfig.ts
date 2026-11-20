@@ -149,6 +149,10 @@ export const GRID_CHANNEL_IDS: ReadonlyArray<TrendMetricId> = [
   'queue',
 ];
 
+export const GRID_CHANNELS: readonly TrendChannelConfig[] = GRID_CHANNEL_IDS.map(
+  (id) => TREND_CHANNELS.find((c) => c.id === id) ?? TREND_CHANNELS[0]
+);
+
 export const MATRIX_CATEGORIES: ReadonlyArray<{ id: MatrixCategory; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'service', label: 'Service Quality' },
