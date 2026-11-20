@@ -19,6 +19,9 @@ export const ROUND_TRIP_SAMPLE_CAP = 60;
 
 export const SHAFT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
 
+export const GITHUB_REPO_URL =
+  import.meta.env.VITE_GITHUB_REPO_URL?.trim() || 'https://github.com/neilsh/lift-bench';
+
 export const CONFIG_LIMITS = {
   arrivalRate: { min: 10, max: 90, step: 2 },
   floors: { min: 4, max: 40, step: 1 },

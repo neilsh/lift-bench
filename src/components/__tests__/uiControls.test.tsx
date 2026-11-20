@@ -248,5 +248,10 @@ describe('ControlDock & TelemetryHud & SimCanvasStage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Metrics' }));
     expect(onOpenMetrics).toHaveBeenCalledTimes(1);
+
+    const githubLink = screen.getByRole('link', { name: /View LiftBench source on GitHub/i });
+    expect(githubLink).toHaveAttribute('target', '_blank');
+    expect(githubLink).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(githubLink.getAttribute('href')).toMatch(/^https:\/\/github\.com\//);
   });
 });

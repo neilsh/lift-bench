@@ -239,6 +239,7 @@ export const MetricsModal = memo(function MetricsModal({
   const [activeTab, setActiveTab] = useState<StudioTab>('overview');
   const [selectedMetric, setSelectedMetric] = useState<TrendMetricId>('avgWait');
   const [trendsLayout, setTrendsLayout] = useState<'single' | 'grid'>('single');
+  const [autoScaleY, setAutoScaleY] = useState(true);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [distMetric, setDistMetric] = useState<'wait' | 'ttd'>('wait');
   const [distMode, setDistMode] = useState<'histogram' | 'cdf'>('histogram');
@@ -1136,35 +1137,51 @@ export const MetricsModal = memo(function MetricsModal({
                   })}
                 </fieldset>
 
-                <fieldset
-                  aria-label="Trends layout mode"
-                  className="m-0 flex items-center gap-1 p-1 bg-slate-950 border border-slate-800 rounded-lg shrink-0"
-                >
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
-                    aria-pressed={trendsLayout === 'single'}
-                    onClick={() => setTrendsLayout('single')}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
-                      trendsLayout === 'single'
-                        ? 'bg-slate-800 text-slate-100'
-                        : 'text-slate-400 hover:text-slate-200'
+                    aria-pressed={autoScaleY}
+                    onClick={() => setAutoScaleY((prev) => !prev)}
+                    title="Auto-scale Y-axis to visible data range (click to toggle 0-based scale)"
+                    className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                      autoScaleY
+                        ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
+                        : 'bg-slate-950 text-slate-400 hover:text-slate-200 border-slate-800'
                     }`}
                   >
-                    Focus View
+                    Auto Y
                   </button>
-                  <button
-                    type="button"
-                    aria-pressed={trendsLayout === 'grid'}
-                    onClick={() => setTrendsLayout('grid')}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
-                      trendsLayout === 'grid'
-                        ? 'bg-slate-800 text-slate-100'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
+
+                  <fieldset
+                    aria-label="Trends layout mode"
+                    className="m-0 flex items-center gap-1 p-1 bg-slate-950 border border-slate-800 rounded-lg shrink-0"
                   >
-                    2×2 Grid
-                  </button>
-                </fieldset>
+                    <button
+                      type="button"
+                      aria-pressed={trendsLayout === 'single'}
+                      onClick={() => setTrendsLayout('single')}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                        trendsLayout === 'single'
+                          ? 'bg-slate-800 text-slate-100'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Focus View
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={trendsLayout === 'grid'}
+                      onClick={() => setTrendsLayout('grid')}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                        trendsLayout === 'grid'
+                          ? 'bg-slate-800 text-slate-100'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      2×2 Grid
+                    </button>
+                  </fieldset>
+                </div>
               </div>
 
               {trendsLayout === 'single' ? (
@@ -1184,6 +1201,7 @@ export const MetricsModal = memo(function MetricsModal({
                     onHoverIndexChange={setHoverIndex}
                     fireAlarmActive={fireAlarmActive}
                     lowerIsBetter={activeChannel.lowerIsBetter}
+                    autoScaleY={autoScaleY}
                     infoSlot={<InfoPopover topic={activeChannel.glossaryKey} size="xs" />}
                   />
 
@@ -1230,6 +1248,7 @@ export const MetricsModal = memo(function MetricsModal({
                       onHoverIndexChange={setHoverIndex}
                       fireAlarmActive={fireAlarmActive}
                       lowerIsBetter={ch.lowerIsBetter}
+                      autoScaleY={autoScaleY}
                       infoSlot={<InfoPopover topic={ch.glossaryKey} size="xs" />}
                     />
                   ))}

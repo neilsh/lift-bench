@@ -75,6 +75,94 @@ export function computeNiceAxisMax(rawMax: number, minFloor = 10): number {
   return Math.max(minFloor, niceNorm * magnitude);
 }
 
+export interface NiceAxisScale {
+  yMin: number;
+  yMax: number;
+  ticks: number[];
+}
+
+function roundAxisValue(val: number): number {
+  return Math.abs(val) < 1e-9 ? 0 : Number(val.toFixed(6));
+}
+
+function pickNiceStep(rawStep: number): number {
+  if (!Number.isFinite(rawStep) || rawStep <= 0) return 1;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const norm = rawStep / magnitude;
+  let niceNorm = 10;
+  if (norm <= 1) niceNorm = 1;
+  else if (norm <= 2) niceNorm = 2;
+  else if (norm <= 2.5) niceNorm = 2.5;
+  else if (norm <= 5) niceNorm = 5;
+  return niceNorm * magnitude;
+}
+
+export function computeAutoAxisScale(
+  rawMin: number,
+  rawMax: number,
+  targetIntervals = 4
+): NiceAxisScale {
+  const safeIntervals = Math.max(2, Math.floor(targetIntervals));
+  if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) {
+    return {
+      yMin: 0,
+      yMax: safeIntervals,
+      ticks: Array.from({ length: safeIntervals + 1 }, (_, i) => i),
+    };
+  }
+
+  const minVal = Math.max(0, Math.min(rawMin, rawMax));
+  const maxVal = Math.max(0, Math.max(rawMin, rawMax));
+
+  if (maxVal <= 1e-9) {
+    return {
+      yMin: 0,
+      yMax: safeIntervals,
+      ticks: Array.from({ length: safeIntervals + 1 }, (_, i) => i),
+    };
+  }
+
+  const span = maxVal - minVal;
+  let paddedMin: number;
+  let paddedMax: number;
+
+  if (span < 1e-6) {
+    const pad = Math.max(maxVal * 0.15, 0.5);
+    paddedMin = Math.max(0, minVal - pad);
+    paddedMax = maxVal + pad;
+  } else {
+    const pad = span * 0.12;
+    paddedMin = minVal <= maxVal * 0.12 ? 0 : Math.max(0, minVal - pad);
+    paddedMax = maxVal + pad;
+  }
+
+  let step = pickNiceStep((paddedMax - paddedMin) / safeIntervals);
+  let yMin = Math.max(0, Math.floor(paddedMin / step) * step);
+  let yMax = Math.ceil(paddedMax / step) * step;
+
+  while (Math.round((yMax - yMin) / step) > safeIntervals + 1) {
+    step = pickNiceStep(step * 1.25);
+    yMin = Math.max(0, Math.floor(paddedMin / step) * step);
+    yMax = Math.ceil(paddedMax / step) * step;
+  }
+
+  if (yMax <= yMin) {
+    yMax = yMin + step;
+  }
+
+  const stepsCount = Math.max(1, Math.round((yMax - yMin) / step));
+  const ticks: number[] = [];
+  for (let i = 0; i <= stepsCount; i++) {
+    ticks.push(roundAxisValue(yMin + i * step));
+  }
+
+  return {
+    yMin: roundAxisValue(yMin),
+    yMax: roundAxisValue(yMax),
+    ticks,
+  };
+}
+
 export interface DistributionBin {
   index: number;
   minSec: number;

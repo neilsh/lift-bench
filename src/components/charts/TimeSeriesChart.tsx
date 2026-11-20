@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import type { TelemetryHistoryPoint } from '../../types/simulation';
-import { computeNiceAxisMax, formatClockSeconds } from '../../utils/cibse';
+import { computeAutoAxisScale, computeNiceAxisMax, formatClockSeconds } from '../../utils/cibse';
 
 export interface ChartReferenceLine {
   label: string;
@@ -25,7 +25,18 @@ interface TimeSeriesChartProps {
   onHoverIndexChange: (index: number | null) => void;
   fireAlarmActive?: boolean;
   lowerIsBetter?: boolean;
+  autoScaleY?: boolean;
   infoSlot?: ReactNode;
+}
+
+function formatAxisTick(val: number): string {
+  if (Math.abs(val) >= 100 || Math.abs(val - Math.round(val)) < 1e-6) {
+    return String(Math.round(val));
+  }
+  if (Math.abs(val * 10 - Math.round(val * 10)) < 1e-6) {
+    return val.toFixed(1);
+  }
+  return val.toFixed(2);
 }
 
 const REF_STROKE: Record<NonNullable<ChartReferenceLine['tone']>, string> = {
@@ -51,6 +62,7 @@ export function TimeSeriesChart({
   onHoverIndexChange,
   fireAlarmActive = false,
   lowerIsBetter = true,
+  autoScaleY = true,
   infoSlot,
 }: TimeSeriesChartProps) {
   const gradId = useId();
@@ -64,24 +76,52 @@ export function TimeSeriesChart({
   const plotW = W - pad.left - pad.right;
   const plotH = H - pad.top - pad.bottom;
 
-  let rawMax = 0;
+  let dataMin = Infinity;
+  let dataMax = -Infinity;
   for (let i = 0; i < count; i++) {
     const lv = accessor(leftSeries[i]);
     const rv = accessor(rightSeries[i]);
-    if (Number.isFinite(lv) && lv > rawMax) rawMax = lv;
-    if (Number.isFinite(rv) && rv > rawMax) rawMax = rv;
-  }
-  for (const ref of referenceLines) {
-    if (Number.isFinite(ref.value) && ref.value > rawMax) {
-      rawMax = ref.value;
+    if (Number.isFinite(lv)) {
+      if (lv < dataMin) dataMin = lv;
+      if (lv > dataMax) dataMax = lv;
+    }
+    if (Number.isFinite(rv)) {
+      if (rv < dataMin) dataMin = rv;
+      if (rv > dataMax) dataMax = rv;
     }
   }
 
-  const yMax = computeNiceAxisMax(rawMax * 1.12, minMaxFloor);
+  let yMin = 0;
+  let yMax = minMaxFloor;
+  let yTicks: number[];
+
+  if (autoScaleY) {
+    const scale = computeAutoAxisScale(
+      Number.isFinite(dataMin) ? dataMin : 0,
+      Number.isFinite(dataMax) ? dataMax : 0,
+      compact ? 3 : 4
+    );
+    yMin = scale.yMin;
+    yMax = scale.yMax;
+    yTicks = scale.ticks;
+  } else {
+    let rawMax = Number.isFinite(dataMax) ? Math.max(0, dataMax) : 0;
+    for (const ref of referenceLines) {
+      if (Number.isFinite(ref.value) && ref.value > rawMax) {
+        rawMax = ref.value;
+      }
+    }
+    yMin = 0;
+    yMax = computeNiceAxisMax(rawMax * 1.12, minMaxFloor);
+    yTicks = [0, 0.25, 0.5, 0.75, 1].map((ratio) => yMax * ratio);
+  }
+
+  const yRange = Math.max(1e-6, yMax - yMin);
   const toX = (idx: number) => (count <= 1 ? pad.left : pad.left + (idx / (count - 1)) * plotW);
   const toY = (val: number) => {
-    const clamped = Math.max(0, Math.min(yMax, Number.isFinite(val) ? val : 0));
-    return pad.top + plotH - (clamped / yMax) * plotH;
+    const safe = Number.isFinite(val) ? val : yMin;
+    const clamped = Math.max(yMin, Math.min(yMax, safe));
+    return pad.top + plotH - ((clamped - yMin) / yRange) * plotH;
   };
 
   const activeIdx =
@@ -135,7 +175,6 @@ export function TimeSeriesChart({
     rightAreaPath = `${rightPath} L${toX(count - 1).toFixed(1)},${(pad.top + plotH).toFixed(1)} L${toX(0).toFixed(1)},${(pad.top + plotH).toFixed(1)} Z`;
   }
 
-  const gridTicks = [0, 0.25, 0.5, 0.75, 1];
   const xTickIndices =
     count >= 2
       ? compact
@@ -225,17 +264,16 @@ export function TimeSeriesChart({
               </linearGradient>
             </defs>
 
-            {gridTicks.map((ratio) => {
-              const val = yMax * ratio;
+            {yTicks.map((val, idx) => {
               const y = toY(val);
               return (
-                <g key={ratio}>
+                <g key={`${val}-${idx}`}>
                   <line
                     x1={pad.left}
                     y1={y}
                     x2={W - pad.right}
                     y2={y}
-                    stroke={ratio === 0 ? '#334155' : 'rgba(51, 65, 85, 0.45)'}
+                    stroke={idx === 0 ? '#334155' : 'rgba(51, 65, 85, 0.45)'}
                     strokeWidth={1}
                   />
                   <text
@@ -246,14 +284,16 @@ export function TimeSeriesChart({
                     fontSize={compact ? 9 : 10}
                     fontFamily="JetBrains Mono, monospace"
                   >
-                    {val >= 100 || Number.isInteger(val) ? Math.round(val) : val.toFixed(1)}
+                    {formatAxisTick(val)}
                   </text>
                 </g>
               );
             })}
 
             {referenceLines.map((ref, idx) => {
-              if (!Number.isFinite(ref.value) || ref.value <= 0 || ref.value > yMax) return null;
+              if (!Number.isFinite(ref.value) || ref.value <= yMin || ref.value > yMax) {
+                return null;
+              }
               const ry = toY(ref.value);
               const stroke = REF_STROKE[ref.tone ?? 'slate'];
               return (

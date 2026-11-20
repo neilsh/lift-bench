@@ -93,9 +93,15 @@ describe('Modals & ErrorBoundary', () => {
     await user.click(screen.getByRole('button', { name: 'Pause' }));
     expect(onTogglePause).toHaveBeenCalledTimes(1);
 
-    // Live Trends tab & 2x2 Grid toggle
+    // Live Trends tab, Auto Y toggle & 2x2 Grid toggle
     await user.click(screen.getByRole('tab', { name: 'Live Trends' }));
     expect(screen.getByRole('img', { name: /time-series chart/i })).toBeInTheDocument();
+    const autoYBtn = screen.getByRole('button', { name: 'Auto Y' });
+    expect(autoYBtn).toHaveAttribute('aria-pressed', 'true');
+    await user.click(autoYBtn);
+    expect(autoYBtn).toHaveAttribute('aria-pressed', 'false');
+    await user.click(autoYBtn);
+    expect(autoYBtn).toHaveAttribute('aria-pressed', 'true');
     await user.click(screen.getByRole('button', { name: '2×2 Grid' }));
     expect(screen.getAllByRole('img', { name: /time-series chart/i })).toHaveLength(4);
 

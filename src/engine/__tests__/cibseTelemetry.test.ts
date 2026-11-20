@@ -9,7 +9,7 @@ import {
   stepTwinSimulation,
   toggleFireAlarmState,
 } from '../elevatorSim';
-import { buildDistributionBins, computeNiceAxisMax } from '../../utils/cibse';
+import { buildDistributionBins, computeAutoAxisScale, computeNiceAxisMax } from '../../utils/cibse';
 import { serializeTelemetryCsv, serializeTelemetryJson } from '../../utils/telemetryExport';
 import type { DispatchAlgorithm, DistributionMode, SimConfig } from '../../types/simulation';
 
@@ -124,6 +124,30 @@ describe('CIBSE Guide D Engineering Telemetry, History & Export', () => {
 
     expect(computeNiceAxisMax(11, 10)).toBe(15);
     expect(computeNiceAxisMax(43, 10)).toBe(50);
+
+    // Auto-scale tightly wraps elevated bands without forcing a 0 origin
+    const elevated = computeAutoAxisScale(41.2, 53.8, 4);
+    expect(elevated.yMin).toBeGreaterThanOrEqual(35);
+    expect(elevated.yMin).toBeLessThanOrEqual(41.2);
+    expect(elevated.yMax).toBeGreaterThanOrEqual(53.8);
+    expect(elevated.yMax).toBeLessThanOrEqual(60);
+    expect(elevated.ticks[0]).toBe(elevated.yMin);
+    expect(elevated.ticks[elevated.ticks.length - 1]).toBe(elevated.yMax);
+
+    // Near-zero series remain grounded at 0
+    const nearZero = computeAutoAxisScale(0.4, 7.2, 4);
+    expect(nearZero.yMin).toBe(0);
+    expect(nearZero.yMax).toBeGreaterThanOrEqual(8);
+
+    // Flat positive series get symmetric breathing room
+    const flat = computeAutoAxisScale(25, 25, 4);
+    expect(flat.yMin).toBeLessThan(25);
+    expect(flat.yMax).toBeGreaterThan(25);
+
+    // All-zero series fall back to a clean non-zero span
+    const zeros = computeAutoAxisScale(0, 0, 4);
+    expect(zeros.yMin).toBe(0);
+    expect(zeros.yMax).toBeGreaterThan(0);
   });
 
   it('serializes valid CSV rows and parseable JSON reports from TelemetrySnapshot', () => {
