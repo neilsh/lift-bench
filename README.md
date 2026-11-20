@@ -4,9 +4,9 @@ An interactive, deterministic twin-tower elevator dispatch simulator and benchma
 
 ## Why This Exists
 
-LiftBench started from a hallway conversation with a coworker: **is a destination dispatch system (where you punch your floor into a lobby kiosk and get assigned a specific car) actually more efficient than a normal elevator, or does it just feel more organized?**
+LiftBench started from a hallway conversation with a colleague: **is a destination dispatch system (where you punch your floor into a lobby kiosk and get assigned a specific car) actually more efficient than a normal elevator, or does it just feel more organized?**
 
-Instead of guessing, we built a side-by-side simulation where two identical towers receive the exact same seeded stream of passenger arrivals in real time—letting you pit traditional **Collective SCAN** against **Destination Dispatch** (and four other scheduling strategies) and watch queues, stops per trip, energy draw, and time-to-destination diverge live.
+Instead of guessing, I vibe-coded a side-by-side simulation where two identical towers receive the exact same seeded stream of passenger arrivals in real time—letting you pit traditional **Collective SCAN** against **Destination Dispatch** (and four other scheduling strategies) and watch queues, stops per trip, energy draw, and time-to-destination diverge live.
 
 ## Features
 
@@ -50,10 +50,6 @@ npm run dev
 ```
 
 The app runs at `http://localhost:3000`.
-
-### Optional Configuration
-
-Set `VITE_GITHUB_REPO_URL` in `.env.local` if you want the in-app GitHub icon link to point to your fork or repository:
 
 ```bash
 VITE_GITHUB_REPO_URL="https://github.com/neilsh/lift-bench"
