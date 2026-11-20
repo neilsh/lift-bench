@@ -236,8 +236,11 @@ export function useSimulationLoop() {
     const nextPaused = !playbackRef.current.paused;
     playbackRef.current.paused = nextPaused;
     setPaused(nextPaused);
+    if (nextPaused) {
+      syncSnapshot();
+    }
     setAnnouncement(nextPaused ? 'Simulation paused.' : 'Simulation resumed.');
-  }, []);
+  }, [syncSnapshot]);
 
   const handleSelectSpeed = useCallback((nextSpeed: PlaybackState['speed']) => {
     playbackRef.current.speed = nextSpeed;
