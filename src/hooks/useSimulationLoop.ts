@@ -185,7 +185,7 @@ export function useSimulationLoop() {
         if (nextLayout) layoutRef.current = nextLayout;
       }
 
-      if (now - lastHudUpdate >= 100) {
+      if (!pb.paused && now - lastHudUpdate >= 100) {
         lastHudUpdate = now;
         setTelemetry(buildTelemetrySnapshot(sim, cfg));
       }
@@ -295,8 +295,11 @@ export function useSimulationLoop() {
       setConfig(nextCfg);
       if (needsReinit) {
         simRef.current = createSimulation(nextCfg, playbackRef.current.seed, 75);
-        syncSnapshot();
+      } else {
+        simRef.current.left.carCapacity = nextCfg.carCapacity;
+        simRef.current.right.carCapacity = nextCfg.carCapacity;
       }
+      syncSnapshot();
     },
     [syncSnapshot]
   );

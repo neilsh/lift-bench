@@ -442,4 +442,19 @@ describe('Elevator Dispatch Algorithms & Engineering Telemetry', () => {
       }
     );
   });
+
+  describe('Live Config Synchronization', () => {
+    it('updates carCapacity on both left and right worlds when stepped with a new config', () => {
+      const cfg = makeConfig({ carCapacity: 8 });
+      const sim = createSimulation(cfg, 20261118, 0);
+
+      expect(sim.left.carCapacity).toBe(8);
+      expect(sim.right.carCapacity).toBe(8);
+
+      stepTwinSimulation(sim, { ...cfg, carCapacity: 12 }, FIXED_DT);
+
+      expect(sim.left.carCapacity).toBe(12);
+      expect(sim.right.carCapacity).toBe(12);
+    });
+  });
 });
