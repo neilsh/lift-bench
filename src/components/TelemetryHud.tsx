@@ -3,6 +3,7 @@ import {
   BookOpen,
   Crown,
   Flame,
+  Keyboard,
   Pause,
   SlidersHorizontal,
   Sunrise,
@@ -34,6 +35,7 @@ interface TelemetryHudProps {
   onSelectAlgorithm: (side: TowerSide, algorithm: DispatchAlgorithm) => void;
   onOpenMetrics: () => void;
   onOpenGuide: (focusedAlgorithm?: DispatchAlgorithm) => void;
+  onOpenShortcuts?: () => void;
 }
 
 const PRESET_ICONS: Record<DistributionMode, ComponentType<{ className?: string }>> = {
@@ -54,6 +56,7 @@ export const TelemetryHud = memo(function TelemetryHud({
   onSelectAlgorithm,
   onOpenMetrics,
   onOpenGuide,
+  onOpenShortcuts,
 }: TelemetryHudProps) {
   const sparkRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -158,6 +161,17 @@ export const TelemetryHud = memo(function TelemetryHud({
                 <BarChart3 className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Metrics</span>
               </button>
+              {onOpenShortcuts && (
+                <button
+                  type="button"
+                  onClick={onOpenShortcuts}
+                  aria-label="Keyboard shortcuts"
+                  title="Keyboard shortcuts (?)"
+                  className="h-8 sm:h-9 w-8 sm:w-9 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 hover:text-white border border-slate-700 inline-flex items-center justify-center transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                >
+                  <Keyboard className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              )}
               <a
                 href={GITHUB_REPO_URL}
                 target="_blank"
