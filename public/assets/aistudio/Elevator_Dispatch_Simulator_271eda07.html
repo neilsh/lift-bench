@@ -1,0 +1,3402 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Elevator Dispatch Simulator — Standard vs. Destination Dispatch</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if (typeof tailwind !== 'undefined') {
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+              mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+            },
+          },
+        },
+      };
+    }
+  </script>
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      min-height: 100%;
+      overflow: hidden;
+      background-color: #090d16;
+      color: #f1f5f9;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      user-select: none;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #canvasContainer {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 200px;
+      width: 100%;
+      background-color: #090d16;
+      overflow: hidden;
+    }
+
+    #simCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Custom accessible touch-friendly range sliders */
+    input[type="range"].sim-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 28px;
+      background: transparent;
+      cursor: pointer;
+      touch-action: none;
+    }
+
+    input[type="range"].sim-slider:focus {
+      outline: none;
+    }
+
+    input[type="range"].sim-slider::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: #1e293b;
+      border: 1px solid #334155;
+    }
+
+    input[type="range"].sim-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 2px solid #f8fafc;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+      margin-top: -9px;
+      transition: transform 0.1s ease, background-color 0.15s ease;
+    }
+
+    input[type="range"].sim-slider:active::-webkit-slider-thumb {
+      transform: scale(1.15);
+      background: #7dd3fc;
+    }
+
+    input[type="range"].sim-slider::-moz-range-track {
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: #1e293b;
+      border: 1px solid #334155;
+    }
+
+    input[type="range"].sim-slider::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 2px solid #f8fafc;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+
+    @keyframes pulse-warn {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.72; transform: scale(0.97); }
+    }
+
+    .badge-saturated {
+      animation: pulse-warn 1.1s infinite ease-in-out;
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    .hud-card-btn {
+      cursor: pointer;
+      transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .hud-card-btn:hover {
+      background-color: rgba(15, 23, 42, 0.96);
+    }
+
+    .hud-card-btn:active {
+      transform: scale(0.992);
+    }
+
+    @keyframes modal-pop {
+      from { opacity: 0; transform: translateY(10px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .modal-panel-anim {
+      animation: modal-pop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  </style>
+</head>
+<body class="flex flex-col h-full w-full bg-[#090d16] text-slate-100 font-sans">
+
+  <!-- TOP TELEMETRY HUD -->
+  <header class="shrink-0 bg-slate-900/95 border-b border-slate-800 px-2 sm:px-4 py-1.5 sm:py-2 z-20 shadow-lg">
+    <div class="max-w-7xl mx-auto flex flex-col gap-1.5">
+
+      <!-- Row 1: Title, Fire Alarm Badge, Advantage Pill, Metrics Trigger & Traffic Presets -->
+      <div class="flex items-center justify-between gap-1.5 flex-wrap">
+        <div class="flex items-center gap-1.5">
+          <div id="statusDot" class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"></div>
+          <h1 class="text-xs sm:text-sm font-bold tracking-tight text-slate-100">
+            Elevator Dispatch Lab
+          </h1>
+          <span id="simClockDisplay" class="font-mono text-[10px] sm:text-[11px] text-slate-400 bg-slate-800/90 px-1.5 py-0.5 rounded">
+            00:00
+          </span>
+          <span id="fireAlertBadge" class="hidden badge-saturated font-mono text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/50">
+            🚨 FIRE ALARM
+          </span>
+        </div>
+
+        <!-- Center Advantage Delta Pill + Deep Metrics Trigger -->
+        <div class="flex items-center gap-1.5">
+          <div id="advantagePill" class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 transition-colors">
+            DD: --% ATTD
+          </div>
+          <button id="btnOpenMetrics" type="button"
+            class="px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-sky-300 border border-sky-500/35 flex items-center gap-1 transition-colors shadow-sm"
+            title="Open live deep metrics, percentiles & energy comparison">
+            <span>📊</span>
+            <span>Metrics</span>
+          </button>
+        </div>
+
+        <!-- Time-of-Day & Scenario Preset Switcher -->
+        <div class="w-full sm:w-auto flex items-center gap-0.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px] sm:text-[11px] overflow-x-auto no-scrollbar">
+          <button data-preset="realistic" type="button"
+            class="preset-btn shrink-0 px-2 py-0.5 sm:py-1 rounded-md font-medium transition-colors bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+            🌅 Morning
+          </button>
+          <button data-preset="lunch" type="button"
+            class="preset-btn shrink-0 px-2 py-0.5 sm:py-1 rounded-md font-medium transition-colors text-slate-400 hover:text-slate-200 border border-transparent">
+            🥪 Lunch
+          </button>
+          <button data-preset="downpeak" type="button"
+            class="preset-btn shrink-0 px-2 py-0.5 sm:py-1 rounded-md font-medium transition-colors text-slate-400 hover:text-slate-200 border border-transparent">
+            🌆 5 PM
+          </button>
+          <button data-preset="vip" type="button"
+            class="preset-btn shrink-0 px-2 py-0.5 sm:py-1 rounded-md font-medium transition-colors text-slate-400 hover:text-slate-200 border border-transparent">
+            🥂 Sky Bar
+          </button>
+          <button data-preset="uniform" type="button"
+            class="preset-btn shrink-0 px-2 py-0.5 sm:py-1 rounded-md font-medium transition-colors text-slate-400 hover:text-slate-200 border border-transparent">
+            📐 Uniform
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 2: Side-by-Side Twin Metrics & Stacked Time-Breakdown Bars -->
+      <div class="grid grid-cols-12 gap-1.5 sm:gap-2 items-stretch">
+
+        <!-- STANDARD BUILDING TELEMETRY -->
+        <div id="stdHudCard" role="button" tabindex="0" title="Click for detailed analytics & percentiles"
+          class="hud-card-btn col-span-6 lg:col-span-5 bg-slate-950/80 border border-slate-800/90 hover:border-amber-500/45 rounded-lg p-1.5 sm:p-2 flex flex-col justify-between gap-1 overflow-hidden">
+          <div class="flex items-center justify-between gap-1">
+            <div class="flex items-center gap-1 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0 shadow-[0_0_6px_rgba(251,191,36,0.5)]"></span>
+              <span class="text-[11px] sm:text-xs font-semibold text-amber-200 truncate">
+                Standard<span class="hidden sm:inline"> (Up/Down)</span>
+              </span>
+              <span id="stdSatBadge" class="hidden badge-saturated text-[8px] sm:text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0">
+                SAT
+              </span>
+            </div>
+            <div class="text-right shrink-0">
+              <span id="stdAttd" class="font-mono text-xs sm:text-base font-bold text-amber-300">0.0s</span>
+              <span class="text-[10px] text-slate-400 hidden sm:inline">avg TTD</span>
+            </div>
+          </div>
+
+          <!-- Stacked Time Breakdown Bar: Wait | Active Travel | Stop Overhead -->
+          <div class="w-full h-2 sm:h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800" title="Queue Wait / Active Travel / Stop Overhead">
+            <div id="stdBarWait" class="h-full bg-amber-500 transition-all duration-150" style="width: 34%"></div>
+            <div id="stdBarTravel" class="h-full bg-sky-500 transition-all duration-150" style="width: 33%"></div>
+            <div id="stdBarStop" class="h-full bg-rose-500 transition-all duration-150" style="width: 33%"></div>
+          </div>
+
+          <div class="flex flex-col gap-0.5 text-[9px] sm:text-[11px] tracking-tight font-mono text-slate-400">
+            <div class="flex items-center justify-between gap-1">
+              <span class="whitespace-nowrap">Thru <strong id="stdThroughput" class="text-emerald-300">0.0</strong>/m</span>
+              <span class="whitespace-nowrap">Stp <strong id="stdStopsTrip" class="text-slate-200">0.0</strong> · Q <strong id="stdQueue" class="text-amber-300">0</strong></span>
+            </div>
+            <div class="flex items-center justify-between gap-1 text-[8.5px] sm:text-[10px] text-slate-500">
+              <span class="whitespace-nowrap">Wait <strong id="stdWaitVal" class="text-amber-300">0s</strong> · P95 <strong id="stdP95Mini" class="text-slate-300">0s</strong></span>
+              <span class="whitespace-nowrap">Out <strong id="stdServed" class="text-slate-300">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- QUEUE SPARKLINE & LEGEND -->
+        <div id="sparkHudCard" role="button" tabindex="0" title="Click to expand live charts"
+          class="hud-card-btn hidden lg:flex lg:col-span-2 bg-slate-950/80 border border-slate-800/90 hover:border-sky-500/45 rounded-lg p-1.5 flex-col justify-between">
+          <div class="flex items-center justify-between text-[9px] font-mono text-slate-400 px-0.5">
+            <span>WAITING QUEUE</span>
+            <span id="sparkMaxLabel">0</span>
+          </div>
+          <canvas id="sparklineCanvas" class="w-full h-7 block"></canvas>
+          <div class="flex items-center justify-center gap-2 text-[9px] text-slate-400">
+            <span class="flex items-center gap-1"><i class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></i>Wait</span>
+            <span class="flex items-center gap-1"><i class="w-1.5 h-1.5 rounded-full bg-sky-400 inline-block"></i>Ride</span>
+            <span class="flex items-center gap-1"><i class="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block"></i>Stops</span>
+          </div>
+        </div>
+
+        <!-- DESTINATION DISPATCH TELEMETRY -->
+        <div id="ddHudCard" role="button" tabindex="0" title="Click for detailed analytics & percentiles"
+          class="hud-card-btn col-span-6 lg:col-span-5 bg-slate-950/80 border border-cyan-900/50 hover:border-cyan-400/60 rounded-lg p-1.5 sm:p-2 flex flex-col justify-between gap-1 overflow-hidden">
+          <div class="flex items-center justify-between gap-1">
+            <div class="flex items-center gap-1 min-w-0">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0 shadow-[0_0_6px_rgba(34,211,238,0.5)]"></span>
+              <span class="text-[11px] sm:text-xs font-semibold text-cyan-200 truncate">
+                <span class="sm:hidden">Dest. DD</span><span class="hidden sm:inline">Destination Dispatch</span>
+              </span>
+              <span id="ddSatBadge" class="hidden badge-saturated text-[8px] sm:text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0">
+                SAT
+              </span>
+            </div>
+            <div class="text-right shrink-0">
+              <span id="ddAttd" class="font-mono text-xs sm:text-base font-bold text-cyan-300">0.0s</span>
+              <span class="text-[10px] text-slate-400 hidden sm:inline">avg TTD</span>
+            </div>
+          </div>
+
+          <!-- Stacked Time Breakdown Bar: Wait | Active Travel | Stop Overhead -->
+          <div class="w-full h-2 sm:h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800" title="Queue Wait / Active Travel / Stop Overhead">
+            <div id="ddBarWait" class="h-full bg-amber-500 transition-all duration-150" style="width: 34%"></div>
+            <div id="ddBarTravel" class="h-full bg-sky-500 transition-all duration-150" style="width: 33%"></div>
+            <div id="ddBarStop" class="h-full bg-rose-500 transition-all duration-150" style="width: 33%"></div>
+          </div>
+
+          <div class="flex flex-col gap-0.5 text-[9px] sm:text-[11px] tracking-tight font-mono text-slate-400">
+            <div class="flex items-center justify-between gap-1">
+              <span class="whitespace-nowrap">Thru <strong id="ddThroughput" class="text-cyan-300">0.0</strong>/m</span>
+              <span class="whitespace-nowrap">Stp <strong id="ddStopsTrip" class="text-slate-200">0.0</strong> · Q <strong id="ddQueue" class="text-cyan-300">0</strong></span>
+            </div>
+            <div class="flex items-center justify-between gap-1 text-[8.5px] sm:text-[10px] text-slate-500">
+              <span class="whitespace-nowrap">Wait <strong id="ddWaitVal" class="text-amber-300">0s</strong> · P95 <strong id="ddP95Mini" class="text-slate-300">0s</strong></span>
+              <span class="whitespace-nowrap">Out <strong id="ddServed" class="text-slate-300">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- CENTER TWIN-TOWER SIMULATION CANVAS -->
+  <main id="canvasContainer" class="relative flex-1 min-h-0 w-full bg-[#090d16] overflow-hidden">
+    <canvas id="simCanvas" class="block w-full h-full cursor-pointer"></canvas>
+
+    <!-- Floating Destination Color Legend -->
+    <div id="legendPill" class="pointer-events-none absolute top-1.5 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-950/85 backdrop-blur-sm border border-slate-800/80 px-2.5 py-0.5 rounded-full text-[9.5px] sm:text-[10px] text-slate-300 shadow whitespace-nowrap">
+      <span class="flex items-center gap-1">
+        <span class="inline-block w-2 h-2 rounded-full" style="background: hsl(205, 85%, 56%)"></span>Low
+      </span>
+      <span class="text-slate-600">→</span>
+      <span class="flex items-center gap-1">
+        <span class="inline-block w-2 h-2 rounded-full" style="background: hsl(42, 90%, 55%)"></span>Mid
+      </span>
+      <span class="text-slate-600">→</span>
+      <span class="flex items-center gap-1">
+        <span class="inline-block w-2 h-2 rounded-full" style="background: hsl(4, 85%, 58%)"></span>High
+      </span>
+      <span class="text-slate-700">|</span>
+      <span class="flex items-center gap-1">
+        <span class="inline-block w-2 h-2 rounded-full bg-indigo-400 ring-1 ring-white"></span>Lobby
+      </span>
+      <span class="hidden md:inline text-slate-700">|</span>
+      <span class="hidden md:inline text-slate-400">Tap floor # to spawn +4</span>
+    </div>
+
+    <!-- Fire Alarm Phase I Emergency Recall Status Banner -->
+    <div id="fireRecallBanner" class="hidden pointer-events-none absolute top-1.5 left-1/2 -translate-x-1/2 badge-saturated flex items-center gap-2 bg-rose-950/95 backdrop-blur-sm border border-rose-500/80 px-3 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold text-rose-200 shadow-[0_0_18px_rgba(244,63,94,0.45)] whitespace-nowrap">
+      <span>🚨</span>
+      <span id="fireRecallStatusText">FIRE ALARM · PHASE I RECALL TO LOBBY</span>
+    </div>
+  </main>
+
+  <!-- BOTTOM CONTROL DOCK / MOBILE COLLAPSIBLE SHEET -->
+  <footer class="shrink-0 bg-slate-900/95 border-t border-slate-800 z-30 shadow-[0_-8px_24px_rgba(0,0,0,0.45)]">
+    <div class="max-w-7xl mx-auto px-2 sm:px-4 pt-2 pb-14 sm:pb-12 flex flex-col gap-2">
+
+      <!-- Transport Bar -->
+      <div class="flex items-center justify-between gap-1 sm:gap-2 overflow-x-auto no-scrollbar">
+        <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          <!-- Play / Pause -->
+          <button id="btnPlayPause" type="button"
+            class="h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-[11px] sm:text-xs font-semibold text-slate-100 flex items-center gap-1 transition-colors shrink-0">
+            <span id="playPauseIcon">⏸</span>
+            <span id="playPauseLabel" class="hidden sm:inline">Pause</span>
+          </button>
+
+          <!-- Speed Selector -->
+          <div class="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 h-9 sm:h-10 shrink-0">
+            <button data-speed="1" type="button" class="speed-btn h-full px-1.5 sm:px-2.5 rounded-md font-mono text-[11px] sm:text-xs font-semibold text-slate-400 hover:text-white transition-colors">1x</button>
+            <button data-speed="3" type="button" class="speed-btn h-full px-1.5 sm:px-2.5 rounded-md font-mono text-[11px] sm:text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 transition-colors">3x</button>
+            <button data-speed="8" type="button" class="speed-btn h-full px-1.5 sm:px-2.5 rounded-md font-mono text-[11px] sm:text-xs font-semibold text-slate-400 hover:text-white transition-colors">8x</button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          <!-- Building-Wide Fire Alarm (Phase I Emergency Recall) -->
+          <button id="btnFireAlarm" type="button"
+            class="h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 border border-rose-500/50 text-rose-300 font-semibold text-[10.5px] sm:text-xs transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap"
+            title="Pull the building Fire Alarm to recall all elevators nonstop to Floor 1 and lock them out of service">
+            <span id="fireBtnIcon">🚨</span>
+            <span id="fireBtnLabel">Fire Alarm</span>
+          </button>
+
+          <!-- Spawn Burst (+12) -->
+          <button id="btnBurst" type="button"
+            class="h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-400 text-slate-950 font-bold text-[10.5px] sm:text-xs shadow-sm transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap">
+            <span>+12<span class="hidden sm:inline"> Burst</span></span>
+          </button>
+
+          <!-- Reset Seed -->
+          <button id="btnReset" type="button"
+            class="h-9 sm:h-10 px-2 sm:px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-[10.5px] sm:text-xs font-medium text-slate-200 transition-colors shrink-0"
+            title="Reset simulation with new seed">
+            Reset
+          </button>
+
+          <!-- Mobile Sliders Drawer Toggle -->
+          <button id="btnToggleSliders" type="button"
+            class="md:hidden h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 text-[10.5px] sm:text-xs font-semibold text-cyan-300 flex items-center gap-1 transition-colors shrink-0">
+            <span>Sliders</span>
+            <span id="drawerChevron" class="text-[10px]">▲</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 5 Core Parameter Sliders -->
+      <div id="slidersPanel" class="hidden md:grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-1.5 pt-1 border-t border-slate-800/80">
+
+        <!-- Slider 1: Arrival Rate -->
+        <div class="flex flex-col justify-center min-h-[44px]">
+          <div class="flex items-center justify-between text-[11px]">
+            <label for="sliderArrival" class="text-slate-300 font-medium">Arrival Rate</label>
+            <span id="valArrival" class="font-mono font-semibold text-cyan-300">42 pax/m</span>
+          </div>
+          <input id="sliderArrival" class="sim-slider" type="range" min="10" max="90" step="2" value="42" />
+        </div>
+
+        <!-- Slider 2: Floors -->
+        <div class="flex flex-col justify-center min-h-[44px]">
+          <div class="flex items-center justify-between text-[11px]">
+            <label for="sliderFloors" class="text-slate-300 font-medium">Building Floors</label>
+            <span id="valFloors" class="font-mono font-semibold text-cyan-300">14 fl</span>
+          </div>
+          <input id="sliderFloors" class="sim-slider" type="range" min="8" max="24" step="1" value="14" />
+        </div>
+
+        <!-- Slider 3: Elevator Cars -->
+        <div class="flex flex-col justify-center min-h-[44px]">
+          <div class="flex items-center justify-between text-[11px]">
+            <label for="sliderCars" class="text-slate-300 font-medium">Elevator Cars</label>
+            <span id="valCars" class="font-mono font-semibold text-cyan-300">4 cars</span>
+          </div>
+          <input id="sliderCars" class="sim-slider" type="range" min="2" max="5" step="1" value="4" />
+        </div>
+
+        <!-- Slider 4: Stop Penalty -->
+        <div class="flex flex-col justify-center min-h-[44px]">
+          <div class="flex items-center justify-between text-[11px]">
+            <label for="sliderStopPenalty" class="text-slate-300 font-medium">Stop Penalty</label>
+            <span id="valStopPenalty" class="font-mono font-semibold text-cyan-300">5.0s</span>
+          </div>
+          <input id="sliderStopPenalty" class="sim-slider" type="range" min="2" max="10" step="0.5" value="5" />
+        </div>
+
+        <!-- Slider 5: Car Capacity -->
+        <div class="flex flex-col justify-center min-h-[44px]">
+          <div class="flex items-center justify-between text-[11px]">
+            <label for="sliderCapacity" class="text-slate-300 font-medium">Car Capacity</label>
+            <span id="valCapacity" class="font-mono font-semibold text-cyan-300">8 pax</span>
+          </div>
+          <input id="sliderCapacity" class="sim-slider" type="range" min="4" max="16" step="1" value="8" />
+        </div>
+
+      </div>
+    </div>
+  </footer>
+
+  <!-- DEEP ANALYTICS & TELEMETRY POPUP MODAL -->
+  <div id="metricsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4">
+    <div id="metricsModalBackdrop" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
+    <div class="modal-panel-anim relative w-full max-w-2xl max-h-[86dvh] bg-slate-900/95 border border-slate-700/90 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+
+      <!-- Modal Header -->
+      <div class="shrink-0 px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-2 bg-slate-950/70">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-base">📊</span>
+          <div class="min-w-0">
+            <h2 class="text-sm sm:text-base font-bold text-slate-100 leading-tight truncate">Live Dispatch Telemetry</h2>
+            <p id="modalPresetDesc" class="text-[10px] sm:text-xs text-slate-400 truncate">Morning Rush · 82% Up / 10% Down / 8% Inter-floor</p>
+          </div>
+        </div>
+        <button id="btnCloseMetrics" type="button"
+          class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center font-bold text-base border border-slate-700 transition-colors shrink-0"
+          aria-label="Close telemetry modal">
+          ✕
+        </button>
+      </div>
+
+      <!-- Scrollable Modal Body -->
+      <div class="flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col gap-3">
+
+        <!-- Live Verdict Banner -->
+        <div id="modalVerdictBanner" class="px-3 py-2 rounded-xl bg-slate-950/90 border border-slate-800 text-xs text-slate-200 flex items-center justify-between gap-2 flex-wrap">
+          <span id="modalVerdictText" class="font-medium">Collecting steady-state samples...</span>
+          <span id="modalSampleClock" class="font-mono text-[11px] text-slate-400">00:00</span>
+        </div>
+
+        <!-- Expanded Live Queue History Chart -->
+        <div class="bg-slate-950/85 border border-slate-800 rounded-xl p-2.5 sm:p-3 flex flex-col gap-1.5">
+          <div class="flex items-center justify-between text-[10px] sm:text-xs font-mono">
+            <span class="text-slate-300 font-semibold">WAITING QUEUE TREND (90s)</span>
+            <div class="flex items-center gap-3">
+              <span class="flex items-center gap-1 text-amber-300"><i class="w-2 h-2 rounded-full bg-amber-400 inline-block"></i>Standard</span>
+              <span class="flex items-center gap-1 text-cyan-300"><i class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></i>Dest. DD</span>
+              <span class="text-slate-500">Max <strong id="modalChartMax" class="text-slate-300">0</strong></span>
+            </div>
+          </div>
+          <canvas id="modalChartCanvas" class="w-full h-24 sm:h-28 block"></canvas>
+        </div>
+
+        <!-- Side-by-Side Time Decomposition -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div class="bg-slate-950/85 border border-slate-800 rounded-xl p-2.5 flex flex-col gap-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-semibold text-amber-300">Standard Time Split</span>
+              <span id="modalStdBreakdownText" class="font-mono text-[10px] text-slate-400">W 0s · R 0s · S 0s</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+              <div id="modalStdWaitBar" class="h-full bg-amber-500 transition-all duration-150" style="width: 34%"></div>
+              <div id="modalStdTravelBar" class="h-full bg-sky-500 transition-all duration-150" style="width: 33%"></div>
+              <div id="modalStdStopBar" class="h-full bg-rose-500 transition-all duration-150" style="width: 33%"></div>
+            </div>
+          </div>
+
+          <div class="bg-slate-950/85 border border-cyan-900/50 rounded-xl p-2.5 flex flex-col gap-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-semibold text-cyan-300">Dest. Dispatch Split</span>
+              <span id="modalDdBreakdownText" class="font-mono text-[10px] text-slate-400">W 0s · R 0s · S 0s</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+              <div id="modalDdWaitBar" class="h-full bg-amber-500 transition-all duration-150" style="width: 34%"></div>
+              <div id="modalDdTravelBar" class="h-full bg-sky-500 transition-all duration-150" style="width: 33%"></div>
+              <div id="modalDdStopBar" class="h-full bg-rose-500 transition-all duration-150" style="width: 33%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detailed Engineering Metrics Table -->
+        <div class="bg-slate-950/85 border border-slate-800 rounded-xl overflow-hidden">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-800 text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-slate-400 bg-slate-900/70">
+                <th class="py-2 px-3">Metric</th>
+                <th class="py-2 px-2 text-right text-amber-300">Standard</th>
+                <th class="py-2 px-2 text-right text-cyan-300">Dest. DD</th>
+                <th class="py-2 px-3 text-right">Delta</th>
+              </tr>
+            </thead>
+            <tbody id="modalMetricsBody" class="divide-y divide-slate-800/70 text-[11px] sm:text-xs font-mono">
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-[10px] sm:text-[11px] text-slate-400 text-center">
+          Tip: Tap any floor number on the center spine to spawn a <span class="text-cyan-300 font-mono">+4</span> burst on that exact floor. Red pulsing rings indicate riders waiting &gt;40s.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 0. Canvas roundRect Polyfill for Older WebViews ---
+    if (
+      typeof CanvasRenderingContext2D !== 'undefined' &&
+      !CanvasRenderingContext2D.prototype.roundRect
+    ) {
+      CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+        const radius = typeof r === 'number' ? r : (Array.isArray(r) ? r[0] : 0);
+        const cr = Math.min(radius, Math.abs(w) / 2, Math.abs(h) / 2);
+        this.moveTo(x + cr, y);
+        this.arcTo(x + w, y, x + w, y + h, cr);
+        this.arcTo(x + w, y + h, x, y + h, cr);
+        this.arcTo(x, y + h, x, y, cr);
+        this.arcTo(x, y, x + w, y, cr);
+        this.closePath();
+        return this;
+      };
+    }
+
+    // --- 1. Deterministic PRNG (Mulberry32) ---
+    function createRng(seed) {
+      let a = seed >>> 0;
+      return function () {
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    // --- 2. Perceptual Destination Color Mapping ---
+    function getDestinationColor(destFloor, totalFloors) {
+      if (destFloor === 1) {
+        return { fill: '#818cf8', stroke: '#ffffff', isLobby: true };
+      }
+      const ratio = totalFloors <= 2 ? 0.5 : (destFloor - 2) / (totalFloors - 2);
+      const hue = Math.round(205 - ratio * 201);
+      return {
+        fill: `hsl(${hue}, 86%, 56%)`,
+        stroke: `hsl(${hue}, 86%, 82%)`,
+        isLobby: false,
+      };
+    }
+
+    // --- 3. Time-of-Day & Scenario Traffic Presets ---
+    const PRESET_META = {
+      realistic: {
+        name: 'Morning Rush',
+        desc: 'Morning Rush · 82% Up / 10% Down / 8% Inter-floor',
+        hotspotIcon: '★',
+      },
+      lunch: {
+        name: 'Lunch Crunch',
+        desc: 'Lunch Crunch · 42% Up / 42% Down / 16% Inter-floor (Heavy Cafeteria)',
+        hotspotIcon: '★',
+      },
+      downpeak: {
+        name: '5 PM Exodus',
+        desc: '5 PM Exodus · 84% Down to Lobby / 10% Up / 6% Inter-floor',
+        hotspotIcon: '★',
+      },
+      vip: {
+        name: 'Sky Bar / VIP',
+        desc: 'Sky Bar · Heavy Top-Floor Express & Penthouse Shuttle',
+        hotspotIcon: '♛',
+      },
+      uniform: {
+        name: 'Uniform Up-Peak',
+        desc: 'Uniform Up-Peak · 100% Up from Lobby (Equal Floor Weights)',
+        hotspotIcon: '',
+      },
+    };
+
+    function computeFloorWeights(floors, mode) {
+      const weights = new Array(floors + 1).fill(0);
+      const cafeteriaFloor = Math.max(3, Math.floor(floors * 0.55));
+      const anchorLow = Math.max(3, Math.floor(floors * 0.35));
+      const anchorHigh = Math.min(floors - 1, anchorLow + 1);
+      let hotspotFloor = cafeteriaFloor;
+
+      for (let f = 2; f <= floors; f++) {
+        if (mode === 'uniform') {
+          weights[f] = 1.0;
+          hotspotFloor = -1;
+        } else if (mode === 'lunch') {
+          let w = 0.9;
+          if (f === 2) w = 0.4;
+          else if (f === cafeteriaFloor) w = 3.5;
+          else if (f === anchorLow || f === anchorHigh) w = 1.3;
+          else if (f === floors) w = 1.1;
+          weights[f] = w;
+          hotspotFloor = cafeteriaFloor;
+        } else if (mode === 'downpeak') {
+          let w = 1.05;
+          if (f === 2) w = 0.5;
+          else if (f === cafeteriaFloor) w = 1.65;
+          else if (f === anchorLow || f === anchorHigh) w = 1.5;
+          else if (f === floors) w = 1.35;
+          weights[f] = w;
+          hotspotFloor = cafeteriaFloor;
+        } else if (mode === 'vip') {
+          let w = 0.65;
+          if (f === 2) w = 0.3;
+          else if (f === floors) w = 3.8;
+          else if (f === floors - 1) w = 2.2;
+          else if (f === cafeteriaFloor) w = 1.15;
+          weights[f] = w;
+          hotspotFloor = floors;
+        } else {
+          let w = 1.0;
+          if (f === 2) w = 0.45;
+          else if (f === cafeteriaFloor) w = 2.2;
+          else if (f === anchorLow || f === anchorHigh) w = 1.45;
+          else if (f === floors) w = 1.35;
+          else if (f > Math.floor(floors * 0.7)) w = 0.85;
+          weights[f] = w;
+          hotspotFloor = cafeteriaFloor;
+        }
+      }
+      return { weights, cafeteriaFloor, anchorLow, anchorHigh, hotspotFloor };
+    }
+
+    function pickWeightedFloor(rng, weights, excludeFloor = -1) {
+      let total = 0;
+      for (let f = 2; f < weights.length; f++) {
+        if (f !== excludeFloor) total += weights[f];
+      }
+      let r = rng() * total;
+      for (let f = 2; f < weights.length; f++) {
+        if (f === excludeFloor) continue;
+        r -= weights[f];
+        if (r <= 0) return f;
+      }
+      return weights.length - 1;
+    }
+
+    // --- 4. Simulation Configuration & State ---
+    const FIXED_DT = 0.05; // 50ms deterministic physics step
+    const CRUISE_SPEED = 2.4; // floors per second
+
+    const config = {
+      arrivalRate: 42, // passengers per minute
+      floors: 14,
+      cars: 4,
+      stopPenalty: 5.0, // seconds per stop
+      carCapacity: 8,
+      distributionMode: 'realistic',
+    };
+
+    const playback = {
+      paused: false,
+      speed: 3,
+      seed: 20261118,
+    };
+
+    let simState = null;
+    let metricsModalOpen = false;
+    let lastCanvasLayout = null;
+
+    function isCarUnderFireAlarm(car) {
+      return car.state === 'FIRE_RECALL' || car.state === 'FIRE_LOCKED';
+    }
+
+    function createBuildingWorld(type, cfg) {
+      const cars = [];
+      for (let i = 0; i < cfg.cars; i++) {
+        cars.push({
+          id: i,
+          floor: 1,
+          direction: 0, // 1 = UP, -1 = DOWN, 0 = IDLE
+          state: 'IDLE', // 'IDLE' | 'MOVING' | 'DWELLING' | 'FIRE_RECALL' | 'FIRE_LOCKED'
+          dwellTimer: 0,
+          dwellDuration: 0,
+          departing: false,
+          departFloor: -1,
+          homing: false,
+          inTrip: false,
+          tripPeakLoad: 0,
+          passengers: [],
+          targetFloors: [],
+          totalStops: 0,
+          trips: 0,
+        });
+      }
+
+      const waitingQueues = Array.from({ length: cfg.floors + 1 }, () => []);
+
+      return {
+        type,
+        cars,
+        waitingQueues,
+        completed: {
+          count: 0,
+          waitSum: 0,
+          travelSum: 0,
+          stopSum: 0,
+        },
+        completionTimes: [],
+        ttdSamples: [],
+        waitSamples: [],
+        totalDistanceFloors: 0,
+        totalMotorStarts: 0,
+        totalBoardedOnTrips: 0,
+        evacuatedCount: 0,
+        maxQueue: 0,
+        queueHistory: [],
+        lastHistorySample: -1,
+        deliveryEffects: [],
+      };
+    }
+
+    function recordTripBoarding(world, car) {
+      if (car.passengers.length === 0) return;
+      if (!car.inTrip) {
+        car.inTrip = true;
+        car.trips++;
+        car.tripPeakLoad = car.passengers.length;
+        world.totalBoardedOnTrips += car.passengers.length;
+      } else if (car.passengers.length > car.tripPeakLoad) {
+        world.totalBoardedOnTrips += car.passengers.length - car.tripPeakLoad;
+        car.tripPeakLoad = car.passengers.length;
+      }
+    }
+
+    function recordPassengerDelivery(world, p) {
+      const waitTime = (p.boardTime ?? simState.simTime) - p.spawnTime;
+      const directTravel = Math.abs(p.dest - p.origin) / CRUISE_SPEED;
+      const totalDuration = simState.simTime - p.spawnTime;
+      const stopTime = Math.max(0, totalDuration - waitTime - directTravel);
+
+      world.completed.count++;
+      world.completed.waitSum += waitTime;
+      world.completed.travelSum += directTravel;
+      world.completed.stopSum += stopTime;
+      world.completionTimes.push(simState.simTime);
+
+      world.ttdSamples.push(totalDuration);
+      if (world.ttdSamples.length > 250) world.ttdSamples.shift();
+      world.waitSamples.push(waitTime);
+      if (world.waitSamples.length > 250) world.waitSamples.shift();
+    }
+
+    function addDeliveryEffect(world, carId, floor, count, labelPrefix = '✓') {
+      if (!simState || count <= 0) return;
+      world.deliveryEffects.push({
+        carId,
+        floor,
+        count,
+        labelPrefix,
+        born: performance.now(),
+        duration: labelPrefix === 'EVAC ' ? 1200 : 900,
+      });
+      if (world.deliveryEffects.length > 28) world.deliveryEffects.shift();
+    }
+
+    function initSimulation(newSeed = playback.seed, warmUpSeconds = 75) {
+      playback.seed = newSeed;
+      const rng = createRng(newSeed);
+      const floorMeta = computeFloorWeights(config.floors, config.distributionMode);
+
+      simState = {
+        simTime: 0,
+        rng,
+        nextSpawnTime: 0.2,
+        nextPassengerId: 1,
+        floorWeights: floorMeta.weights,
+        cafeteriaFloor: floorMeta.cafeteriaFloor,
+        anchorLow: floorMeta.anchorLow,
+        anchorHigh: floorMeta.anchorHigh,
+        hotspotFloor: floorMeta.hotspotFloor,
+        fireAlarmActive: false,
+        stairEvacTimer: 0,
+        floorRipples: [],
+        standard: createBuildingWorld('standard', config),
+        destination: createBuildingWorld('destination', config),
+      };
+
+      syncFireUI();
+
+      // Synchronous warm-up so structural changes start in realistic steady-state traffic
+      const warmSteps = Math.floor(warmUpSeconds / FIXED_DT);
+      for (let i = 0; i < warmSteps; i++) {
+        stepTwinSimulation(FIXED_DT);
+      }
+
+      // Clear warm-up transient particles so live rendering begins cleanly
+      simState.standard.deliveryEffects = [];
+      simState.destination.deliveryEffects = [];
+    }
+
+    // --- 4b. Building-Wide Fire Alarm (Phase I Emergency Recall for ALL Elevators) ---
+    function evacuateCarAtLobby(world, car) {
+      car.floor = 1;
+      car.direction = 0;
+      car.state = 'FIRE_LOCKED';
+      car.dwellTimer = 0;
+      car.dwellDuration = 0;
+      car.departing = false;
+      car.departFloor = -1;
+      car.homing = false;
+      car.inTrip = false;
+      car.tripPeakLoad = 0;
+      car.targetFloors = [];
+
+      if (car.passengers.length > 0) {
+        const evacCount = car.passengers.length;
+        world.evacuatedCount += evacCount;
+        car.passengers = [];
+        addDeliveryEffect(world, car.id, 1, evacCount, 'EVAC ');
+      }
+    }
+
+    function stepFireRecallCar(world, car, dt) {
+      if (car.state === 'FIRE_LOCKED') {
+        car.floor = 1;
+        car.direction = 0;
+        car.targetFloors = [];
+        return;
+      }
+
+      // Nonstop Phase I Recall express descent to Lobby (Floor 1)
+      car.targetFloors = [1];
+      if (car.floor <= 1.02) {
+        evacuateCarAtLobby(world, car);
+        return;
+      }
+
+      car.direction = -1;
+      const stepDist = CRUISE_SPEED * dt;
+      const travel = Math.min(stepDist, car.floor - 1);
+      world.totalDistanceFloors += travel;
+      car.floor -= travel;
+
+      if (car.floor <= 1.02) {
+        evacuateCarAtLobby(world, car);
+      }
+    }
+
+    function toggleFireAlarm() {
+      if (!simState) return;
+
+      if (!simState.fireAlarmActive) {
+        simState.fireAlarmActive = true;
+        simState.stairEvacTimer = 1.6;
+
+        // Recall EVERY elevator in BOTH buildings immediately to Floor 1
+        [simState.standard, simState.destination].forEach((world) => {
+          world.evacuatedCount = 0;
+          for (let i = 0; i < world.cars.length; i++) {
+            const car = world.cars[i];
+            car.dwellTimer = 0;
+            car.dwellDuration = 0;
+            car.departing = false;
+            car.departFloor = -1;
+            car.homing = false;
+
+            if (car.floor <= 1.05) {
+              evacuateCarAtLobby(world, car);
+            } else {
+              car.state = 'FIRE_RECALL';
+              car.direction = -1;
+              car.targetFloors = [1];
+              world.totalMotorStarts++;
+            }
+          }
+        });
+      } else {
+        simState.fireAlarmActive = false;
+        simState.nextSpawnTime = simState.simTime + 0.35;
+
+        // Release all recalled/locked cars back into normal service
+        [simState.standard, simState.destination].forEach((world) => {
+          for (let i = 0; i < world.cars.length; i++) {
+            const car = world.cars[i];
+            if (isCarUnderFireAlarm(car)) {
+              car.state = 'IDLE';
+              car.direction = 0;
+              car.departing = false;
+              car.departFloor = -1;
+              car.homing = false;
+              car.targetFloors = [];
+            }
+          }
+        });
+
+        // Reassign any remaining waiting DD passengers evenly across the restored fleet
+        const ddWorld = simState.destination;
+        for (let f = 1; f <= config.floors; f++) {
+          const q = ddWorld.waitingQueues[f];
+          for (let i = 0; i < q.length; i++) {
+            assignPassengerDestinationDispatch(ddWorld, q[i]);
+          }
+        }
+      }
+
+      syncFireUI();
+      updateTelemetryHUD();
+    }
+
+    function syncFireUI() {
+      const btn = document.getElementById('btnFireAlarm');
+      const icon = document.getElementById('fireBtnIcon');
+      const label = document.getElementById('fireBtnLabel');
+      const badge = document.getElementById('fireAlertBadge');
+      const dot = document.getElementById('statusDot');
+      const legendPill = document.getElementById('legendPill');
+      const recallBanner = document.getElementById('fireRecallBanner');
+      if (!btn || !icon || !label || !badge || !dot) return;
+
+      if (!simState || !simState.fireAlarmActive) {
+        btn.className =
+          'h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 border border-rose-500/50 text-rose-300 font-semibold text-[10.5px] sm:text-xs transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap';
+        icon.textContent = '🚨';
+        label.textContent = 'Fire Alarm';
+        badge.classList.add('hidden');
+        if (legendPill) legendPill.classList.remove('hidden');
+        if (recallBanner) recallBanner.classList.add('hidden');
+        dot.className = playback.paused
+          ? 'w-2 h-2 rounded-full bg-amber-400'
+          : 'w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]';
+      } else {
+        btn.className =
+          'h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-rose-600 hover:bg-rose-500 active:bg-rose-400 border border-rose-300 text-white font-bold text-[10.5px] sm:text-xs shadow-[0_0_14px_rgba(244,63,94,0.55)] transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap';
+        icon.textContent = '✅';
+        label.textContent = 'Clear Alarm';
+        badge.textContent = '🚨 FIRE ALARM';
+        badge.classList.remove('hidden');
+        if (legendPill) legendPill.classList.add('hidden');
+        if (recallBanner) recallBanner.classList.remove('hidden');
+        dot.className = 'w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e] badge-saturated';
+      }
+    }
+
+    // --- 5. Shared Deterministic Passenger Generation ---
+    function generatePassengerSpec(forcedOrigin = null) {
+      const rng = simState.rng;
+      const floors = config.floors;
+      const mode = config.distributionMode;
+      let origin = 1;
+      let dest = 2;
+
+      if (forcedOrigin !== null) {
+        origin = Math.max(1, Math.min(floors, forcedOrigin));
+        if (origin === 1) {
+          dest = mode === 'uniform'
+            ? 2 + Math.floor(rng() * (floors - 1))
+            : pickWeightedFloor(rng, simState.floorWeights);
+        } else {
+          dest = rng() < 0.72 ? 1 : pickWeightedFloor(rng, simState.floorWeights, origin);
+        }
+      } else if (mode === 'uniform') {
+        origin = 1;
+        dest = 2 + Math.floor(rng() * (floors - 1));
+      } else if (mode === 'lunch') {
+        const roll = rng();
+        if (roll < 0.42) {
+          origin = 1;
+          dest = pickWeightedFloor(rng, simState.floorWeights);
+        } else if (roll < 0.84) {
+          origin = pickWeightedFloor(rng, simState.floorWeights);
+          dest = 1;
+        } else {
+          if (rng() < 0.5) {
+            origin = pickWeightedFloor(rng, simState.floorWeights, simState.cafeteriaFloor);
+            dest = simState.cafeteriaFloor;
+          } else {
+            origin = simState.cafeteriaFloor;
+            dest = pickWeightedFloor(rng, simState.floorWeights, simState.cafeteriaFloor);
+          }
+        }
+      } else if (mode === 'downpeak') {
+        const roll = rng();
+        if (roll < 0.84) {
+          origin = pickWeightedFloor(rng, simState.floorWeights);
+          dest = 1;
+        } else if (roll < 0.94) {
+          origin = 1;
+          dest = pickWeightedFloor(rng, simState.floorWeights);
+        } else {
+          origin = pickWeightedFloor(rng, simState.floorWeights);
+          dest = pickWeightedFloor(rng, simState.floorWeights, origin);
+        }
+      } else if (mode === 'vip') {
+        const roll = rng();
+        if (roll < 0.74) {
+          origin = 1;
+          dest = pickWeightedFloor(rng, simState.floorWeights);
+        } else if (roll < 0.92) {
+          origin = pickWeightedFloor(rng, simState.floorWeights);
+          dest = 1;
+        } else {
+          origin = pickWeightedFloor(rng, simState.floorWeights);
+          dest = origin !== floors && rng() < 0.65 ? floors : pickWeightedFloor(rng, simState.floorWeights, origin);
+        }
+      } else {
+        // Morning Rush ('realistic')
+        const roll = rng();
+        if (roll < 0.82) {
+          origin = 1;
+          dest = pickWeightedFloor(rng, simState.floorWeights);
+        } else if (roll < 0.92) {
+          origin = pickWeightedFloor(rng, simState.floorWeights);
+          dest = 1;
+        } else {
+          origin = pickWeightedFloor(rng, simState.floorWeights);
+          if (origin !== simState.cafeteriaFloor && rng() < 0.55) {
+            dest = simState.cafeteriaFloor;
+          } else {
+            dest = pickWeightedFloor(rng, simState.floorWeights, origin);
+          }
+        }
+      }
+
+      const id = simState.nextPassengerId++;
+      const color = getDestinationColor(dest, floors);
+      const dir = dest > origin ? 1 : -1;
+
+      return {
+        id,
+        spawnTime: simState.simTime,
+        origin,
+        dest,
+        dir,
+        color,
+      };
+    }
+
+    function spawnPassengerPair(spec) {
+      const stdPax = {
+        ...spec,
+        assignedCarId: null,
+        boardTime: null,
+        stopOverhead: 0,
+      };
+      simState.standard.waitingQueues[spec.origin].push(stdPax);
+
+      const ddPax = {
+        ...spec,
+        assignedCarId: null,
+        boardTime: null,
+        stopOverhead: 0,
+      };
+      if (!simState.fireAlarmActive) {
+        assignPassengerDestinationDispatch(simState.destination, ddPax);
+      }
+      simState.destination.waitingQueues[spec.origin].push(ddPax);
+    }
+
+    function spawnBurst(count = 12, forcedOrigin = null) {
+      if (!simState) return;
+      for (let i = 0; i < count; i++) {
+        spawnPassengerPair(generatePassengerSpec(forcedOrigin));
+      }
+      if (forcedOrigin !== null) {
+        simState.floorRipples.push({
+          floor: forcedOrigin,
+          born: performance.now(),
+          duration: 750,
+        });
+      }
+    }
+
+    // --- 6. Destination Dispatch Cost Function (Wave-Aware, True Directional SDF & Express Clustering) ---
+    function getAssignedPassengersForCar(world, carId) {
+      const assigned = [];
+      for (let f = 1; f < world.waitingQueues.length; f++) {
+        const q = world.waitingQueues[f];
+        for (let i = 0; i < q.length; i++) {
+          if (q[i].assignedCarId === carId) {
+            assigned.push(q[i]);
+          }
+        }
+      }
+      return assigned;
+    }
+
+    function isCarAtFloorReady(world, carId, floor) {
+      if (carId === null || carId === undefined) return false;
+      const c = world.cars[carId];
+      if (!c || isCarUnderFireAlarm(c) || c.departing) return false;
+      return (
+        Math.abs(c.floor - floor) < 0.08 &&
+        (c.state === 'DWELLING' || c.state === 'IDLE')
+      );
+    }
+
+    function estimateCarEtaToFloor(world, car, targetFloor, targetDir) {
+      if (!car || isCarUnderFireAlarm(car)) return 999;
+      const stopPenalty = config.stopPenalty;
+      const atFloorNow = Math.abs(car.floor - targetFloor) < 0.08 && !car.departing;
+
+      if (car.state === 'IDLE') {
+        return Math.abs(car.floor - targetFloor) / CRUISE_SPEED;
+      }
+
+      if (car.state === 'DWELLING') {
+        const dirConflict =
+          car.passengers.length > 0 &&
+          car.direction !== 0 &&
+          car.direction !== targetDir;
+
+        if (atFloorNow && !dirConflict) {
+          return 0;
+        }
+
+        if (car.passengers.length > 0 && car.direction !== 0) {
+          const stopSet = new Set();
+          let extremeFloor = car.floor;
+          for (const p of car.passengers) {
+            stopSet.add(p.dest);
+            if (car.direction === 1 && p.dest > extremeFloor) extremeFloor = p.dest;
+            if (car.direction === -1 && p.dest < extremeFloor) extremeFloor = p.dest;
+          }
+          const alignedEnRoute =
+            !dirConflict &&
+            ((car.direction === 1 && targetFloor > car.floor && targetFloor <= extremeFloor) ||
+              (car.direction === -1 && targetFloor < car.floor && targetFloor >= extremeFloor));
+
+          if (alignedEnRoute) {
+            let stopsBefore = 0;
+            for (const s of stopSet) {
+              if (
+                (car.direction === 1 && s > car.floor && s < targetFloor) ||
+                (car.direction === -1 && s < car.floor && s > targetFloor)
+              ) {
+                stopsBefore++;
+              }
+            }
+            return (
+              car.dwellTimer +
+              Math.abs(targetFloor - car.floor) / CRUISE_SPEED +
+              stopsBefore * stopPenalty
+            );
+          }
+
+          return (
+            car.dwellTimer +
+            (Math.abs(extremeFloor - car.floor) + Math.abs(extremeFloor - targetFloor)) /
+              CRUISE_SPEED +
+            stopSet.size * stopPenalty
+          );
+        }
+
+        return car.dwellTimer + Math.abs(car.floor - targetFloor) / CRUISE_SPEED;
+      }
+
+      // MOVING
+      const stopSet = new Set();
+      let extremeFloor = car.floor;
+      for (const p of car.passengers) {
+        stopSet.add(p.dest);
+        if (car.direction === 1 && p.dest > extremeFloor) extremeFloor = p.dest;
+        if (car.direction === -1 && p.dest < extremeFloor) extremeFloor = p.dest;
+      }
+
+      const movingToward =
+        (car.direction === 1 && targetFloor >= car.floor - 0.05) ||
+        (car.direction === -1 && targetFloor <= car.floor + 0.05);
+      const dirCompatible =
+        car.passengers.length === 0 ||
+        car.direction === 0 ||
+        car.direction === targetDir;
+
+      if (movingToward && dirCompatible) {
+        let stopsBefore = 0;
+        for (const s of stopSet) {
+          if (
+            (car.direction === 1 && s > car.floor && s < targetFloor) ||
+            (car.direction === -1 && s < car.floor && s > targetFloor)
+          ) {
+            stopsBefore++;
+          }
+        }
+        return (
+          Math.abs(targetFloor - car.floor) / CRUISE_SPEED +
+          stopsBefore * stopPenalty
+        );
+      }
+
+      return (
+        (Math.abs(extremeFloor - car.floor) + Math.abs(extremeFloor - targetFloor)) /
+          CRUISE_SPEED +
+        stopSet.size * stopPenalty
+      );
+    }
+
+    function assignPassengerDestinationDispatch(world, pax) {
+      const cars = world.cars;
+      const cap = config.carCapacity;
+      const stopPenalty = config.stopPenalty;
+
+      const healthyCars = cars.filter((c) => !isCarUnderFireAlarm(c));
+      if (healthyCars.length === 0) {
+        pax.assignedCarId = null;
+        return;
+      }
+
+      const estCycleTime =
+        (2 * Math.max(4, config.floors * 0.65)) / CRUISE_SPEED + 3.2 * stopPenalty;
+
+      const totalWaiting = countTotalWaiting(world);
+      const fleetCap = Math.max(1, healthyCars.length * cap);
+      const trafficLoad = Math.min(1, Math.max(totalWaiting / (fleetCap * 0.6), config.arrivalRate / 55));
+
+      let bestCar = healthyCars[0];
+      let bestCost = Infinity;
+
+      for (let i = 0; i < healthyCars.length; i++) {
+        const car = healthyCars[i];
+        const waitingAssigned = getAssignedPassengersForCar(world, car.id);
+
+        const atOriginReady =
+          Math.abs(car.floor - pax.origin) < 0.08 &&
+          !car.departing &&
+          (car.state === 'DWELLING' || car.state === 'IDLE') &&
+          (car.passengers.length === 0 || car.direction === 0 || car.direction === pax.dir);
+
+        const sameOriginSameDir = [];
+        for (let k = 0; k < waitingAssigned.length; k++) {
+          const w = waitingAssigned[k];
+          if (w.origin === pax.origin && w.dir === pax.dir) {
+            sameOriginSameDir.push(w);
+          }
+        }
+
+        let etaOrigin = estimateCarEtaToFloor(world, car, pax.origin, pax.dir);
+
+        if (car.departing && Math.abs(car.floor - pax.origin) < 0.15) {
+          etaOrigin = Math.max(etaOrigin, estCycleTime * 0.85);
+        }
+
+        let tripHeadcount = 0;
+        if (atOriginReady) {
+          tripHeadcount = car.passengers.length + sameOriginSameDir.length;
+        } else if (pax.origin === 1) {
+          tripHeadcount = sameOriginSameDir.length;
+        } else {
+          const alignedOnboard =
+            car.direction === pax.dir ? car.passengers.length : 0;
+          tripHeadcount = alignedOnboard + sameOriginSameDir.length;
+        }
+
+        const wave = Math.floor(tripHeadcount / cap);
+        if (wave > 0) {
+          etaOrigin += wave * estCycleTime;
+        }
+
+        const batchDests = [];
+        const plannedStops = new Set();
+
+        if (wave === 0) {
+          if (atOriginReady) {
+            for (const p of car.passengers) {
+              batchDests.push(p.dest);
+              plannedStops.add(p.dest);
+            }
+          } else if (pax.origin > 1 && car.direction === pax.dir) {
+            for (const p of car.passengers) {
+              batchDests.push(p.dest);
+              plannedStops.add(p.dest);
+            }
+          }
+          for (const p of sameOriginSameDir) {
+            batchDests.push(p.dest);
+            plannedStops.add(p.dest);
+          }
+        }
+
+        const directRide = Math.abs(pax.dest - pax.origin) / CRUISE_SPEED;
+        const minF = Math.min(pax.origin, pax.dest);
+        const maxF = Math.max(pax.origin, pax.dest);
+
+        let intermediateStops = 0;
+        for (const s of plannedStops) {
+          if (s > minF && s < maxF) intermediateStops++;
+        }
+
+        const addsStop = !plannedStops.has(pax.dest) ? 1 : 0;
+
+        let delayedExistingRiders = 0;
+        if (addsStop) {
+          for (let b = 0; b < batchDests.length; b++) {
+            const d = batchDests[b];
+            if ((pax.dir === 1 && d > pax.dest) || (pax.dir === -1 && d < pax.dest)) {
+              delayedExistingRiders++;
+            }
+          }
+        }
+
+        const sdfWeight = 0.78 - 0.35 * trafficLoad;
+        const trueSDF = delayedExistingRiders * stopPenalty * sdfWeight;
+
+        let bandPenalty = 0;
+        let clusterBonus = 0;
+
+        if (pax.dir === 1 && batchDests.length > 0) {
+          let minD = Infinity;
+          let maxD = -Infinity;
+          for (let b = 0; b < batchDests.length; b++) {
+            const d = batchDests[b];
+            if (d < minD) minD = d;
+            if (d > maxD) maxD = d;
+          }
+          const oldSpan = maxD - minD;
+          const newSpan = Math.max(maxD, pax.dest) - Math.min(minD, pax.dest);
+          const spanDelta = newSpan - oldSpan;
+
+          bandPenalty = spanDelta * (1.25 - 0.4 * trafficLoad);
+
+          if (!addsStop) {
+            clusterBonus = -3.6;
+          } else if (pax.dest > minD && pax.dest < maxD) {
+            clusterBonus = -1.2;
+          }
+        } else if (!addsStop && batchDests.length > 0) {
+          clusterBonus = -2.5;
+        }
+
+        const cycleExtensionCost = addsStop * stopPenalty * 0.32;
+        const futureUncertainty =
+          !atOriginReady && batchDests.length === 0 ? stopPenalty * 0.45 * trafficLoad : 0;
+
+        let detourPenalty = 0;
+        if (pax.origin > 1 && pax.dir === 1 && car.homing && world.waitingQueues[1].length > 0) {
+          detourPenalty = 14.0;
+        }
+
+        const totalCost =
+          etaOrigin +
+          directRide +
+          intermediateStops * stopPenalty +
+          trueSDF +
+          bandPenalty +
+          clusterBonus +
+          cycleExtensionCost +
+          futureUncertainty +
+          detourPenalty;
+
+        if (totalCost < bestCost) {
+          bestCost = totalCost;
+          bestCar = car;
+        }
+      }
+
+      pax.assignedCarId = bestCar.id;
+    }
+
+    // --- 7. Main Fixed-Timestep Physics & Dispatch Loop ---
+    function stepTwinSimulation(dt) {
+      simState.simTime += dt;
+
+      if (!simState.fireAlarmActive) {
+        if (simState.simTime >= simState.nextSpawnTime) {
+          spawnPassengerPair(generatePassengerSpec());
+          const ratePerSec = config.arrivalRate / 60;
+          const u = Math.max(1e-6, simState.rng());
+          const interArrival = -Math.log(u) / ratePerSec;
+          simState.nextSpawnTime = simState.simTime + Math.min(interArrival, 12);
+        }
+      } else {
+        // During Fire Alarm, waiting passengers safely evacuate via stairwells ("Use Stairs")
+        simState.stairEvacTimer -= dt;
+        if (simState.stairEvacTimer <= 0) {
+          simState.stairEvacTimer = 1.1;
+          [simState.standard, simState.destination].forEach((world) => {
+            for (let f = config.floors; f >= 1; f--) {
+              const q = world.waitingQueues[f];
+              if (q.length > 0) {
+                q.shift();
+                world.evacuatedCount++;
+                break;
+              }
+            }
+          });
+        }
+      }
+
+      stepStandardWorld(simState.standard, dt);
+      stepDestinationWorld(simState.destination, dt);
+
+      const secFloor = Math.floor(simState.simTime);
+      if (secFloor > simState.standard.lastHistorySample) {
+        simState.standard.lastHistorySample = secFloor;
+        simState.destination.lastHistorySample = secFloor;
+
+        const stdQ = countTotalWaiting(simState.standard);
+        const ddQ = countTotalWaiting(simState.destination);
+        if (stdQ > simState.standard.maxQueue) simState.standard.maxQueue = stdQ;
+        if (ddQ > simState.destination.maxQueue) simState.destination.maxQueue = ddQ;
+
+        simState.standard.queueHistory.push(stdQ);
+        simState.destination.queueHistory.push(ddQ);
+
+        if (simState.standard.queueHistory.length > 90) {
+          simState.standard.queueHistory.shift();
+          simState.destination.queueHistory.shift();
+        }
+      }
+    }
+
+    function countTotalWaiting(world) {
+      let sum = 0;
+      for (let f = 1; f < world.waitingQueues.length; f++) {
+        sum += world.waitingQueues[f].length;
+      }
+      return sum;
+    }
+
+    // --- 7a. Standard Collective SCAN Controller ---
+    function stepStandardWorld(world, dt) {
+      const cars = world.cars;
+      const cap = config.carCapacity;
+      const stopPenalty = config.stopPenalty;
+
+      for (let i = 0; i < cars.length; i++) {
+        const car = cars[i];
+        if (isCarUnderFireAlarm(car)) {
+          stepFireRecallCar(world, car, dt);
+          continue;
+        }
+
+        if (car.state === 'DWELLING') {
+          const curFloor = Math.round(car.floor);
+
+          if (car.passengers.length < cap && world.waitingQueues[curFloor].length > 0) {
+            if (car.direction === 0) {
+              car.direction = world.waitingQueues[curFloor][0].dir;
+            }
+            const q = world.waitingQueues[curFloor];
+            let extraBoarded = 0;
+            for (let k = 0; k < q.length && car.passengers.length < cap; ) {
+              if (q[k].dir === car.direction) {
+                const boarded = q.splice(k, 1)[0];
+                boarded.boardTime = simState.simTime;
+                car.passengers.push(boarded);
+                extraBoarded++;
+              } else {
+                k++;
+              }
+            }
+            if (extraBoarded > 0) {
+              recordTripBoarding(world, car);
+              car.dwellTimer = Math.max(car.dwellTimer, extraBoarded * 0.35);
+            }
+          }
+
+          car.dwellTimer -= dt;
+          if (car.dwellTimer <= 0) {
+            car.dwellTimer = 0;
+            const nextFloor = pickNextStandardFloor(world, car);
+            if (nextFloor !== null && nextFloor !== Math.round(car.floor)) {
+              car.direction = nextFloor > car.floor ? 1 : -1;
+              car.state = 'MOVING';
+              world.totalMotorStarts++;
+              car.targetFloors = [nextFloor];
+            } else {
+              car.direction = 0;
+              car.state = 'IDLE';
+              car.targetFloors = [];
+            }
+          }
+          continue;
+        }
+
+        if (car.state === 'IDLE') {
+          const nextFloor = pickNextStandardFloor(world, car);
+          if (nextFloor !== null) {
+            if (Math.abs(nextFloor - car.floor) < 0.05) {
+              car.floor = nextFloor;
+              beginStandardStop(world, car, nextFloor, stopPenalty);
+            } else {
+              car.direction = nextFloor > car.floor ? 1 : -1;
+              car.state = 'MOVING';
+              world.totalMotorStarts++;
+              car.targetFloors = [nextFloor];
+            }
+          }
+          continue;
+        }
+
+        if (car.state === 'MOVING') {
+          const nextFloor = pickNextStandardFloor(world, car);
+          if (nextFloor === null) {
+            car.state = 'IDLE';
+            car.direction = 0;
+            car.targetFloors = [];
+            continue;
+          }
+
+          car.targetFloors = [nextFloor];
+          const delta = nextFloor - car.floor;
+          if (Math.abs(delta) < 0.02) {
+            car.floor = nextFloor;
+            beginStandardStop(world, car, nextFloor, stopPenalty);
+            continue;
+          }
+
+          car.direction = delta > 0 ? 1 : -1;
+          const stepDist = CRUISE_SPEED * dt;
+          if (Math.abs(delta) <= stepDist) {
+            world.totalDistanceFloors += Math.abs(delta);
+            car.floor = nextFloor;
+            beginStandardStop(world, car, nextFloor, stopPenalty);
+          } else {
+            world.totalDistanceFloors += stepDist;
+            car.floor += car.direction * stepDist;
+          }
+        }
+      }
+    }
+
+    function pickNextStandardFloor(world, car) {
+      const floors = config.floors;
+      const cap = config.carCapacity;
+      const upBound = Math.ceil(car.floor - 0.02);
+      const downBound = Math.floor(car.floor + 0.02);
+
+      const stopSet = new Set();
+      for (const p of car.passengers) {
+        stopSet.add(p.dest);
+      }
+
+      if (car.passengers.length < cap) {
+        for (let f = 1; f <= floors; f++) {
+          const q = world.waitingQueues[f];
+          if (q.length === 0) continue;
+
+          if (car.direction === 1 && f >= upBound && q.some((p) => p.dir === 1)) {
+            stopSet.add(f);
+          } else if (car.direction === -1 && f <= downBound && q.some((p) => p.dir === -1)) {
+            stopSet.add(f);
+          } else if (car.direction === 0) {
+            let betterIdleExists = false;
+            const myDist = Math.abs(car.floor - f);
+            for (const other of world.cars) {
+              if (other.id !== car.id && other.state === 'IDLE') {
+                const otherDist = Math.abs(other.floor - f);
+                if (otherDist < myDist - 0.1 || (Math.abs(otherDist - myDist) <= 0.1 && other.id < car.id)) {
+                  betterIdleExists = true;
+                  break;
+                }
+              }
+            }
+            if (!betterIdleExists) {
+              stopSet.add(f);
+            }
+          }
+        }
+      }
+
+      if (stopSet.size === 0 && car.direction !== 0) {
+        for (let f = 1; f <= floors; f++) {
+          if (world.waitingQueues[f].length > 0) {
+            stopSet.add(f);
+          }
+        }
+      }
+
+      if (stopSet.size === 0) return null;
+
+      if (car.direction === 1) {
+        let bestUp = Infinity;
+        for (const f of stopSet) {
+          if (f >= upBound && f < bestUp) bestUp = f;
+        }
+        if (bestUp !== Infinity) return bestUp;
+
+        let highestDown = -Infinity;
+        for (const f of stopSet) {
+          if (f > highestDown) highestDown = f;
+        }
+        return highestDown !== -Infinity ? highestDown : null;
+      }
+
+      if (car.direction === -1) {
+        let bestDown = -Infinity;
+        for (const f of stopSet) {
+          if (f <= downBound && f > bestDown) bestDown = f;
+        }
+        if (bestDown !== -Infinity) return bestDown;
+
+        let lowestUp = Infinity;
+        for (const f of stopSet) {
+          if (f < lowestUp) lowestUp = f;
+        }
+        return lowestUp !== Infinity ? lowestUp : null;
+      }
+
+      let nearest = null;
+      let minDist = Infinity;
+      for (const f of stopSet) {
+        const d = Math.abs(f - car.floor);
+        if (d < minDist) {
+          minDist = d;
+          nearest = f;
+        }
+      }
+      return nearest;
+    }
+
+    function beginStandardStop(world, car, floor, stopPenalty) {
+      let transfers = 0;
+      let alighted = 0;
+
+      for (let i = car.passengers.length - 1; i >= 0; i--) {
+        const p = car.passengers[i];
+        if (p.dest === floor) {
+          car.passengers.splice(i, 1);
+          transfers++;
+          alighted++;
+          recordPassengerDelivery(world, p);
+        }
+      }
+
+      if (alighted > 0) {
+        addDeliveryEffect(world, car.id, floor, alighted);
+      }
+
+      if (car.passengers.length === 0) {
+        car.inTrip = false;
+        car.tripPeakLoad = 0;
+
+        const q = world.waitingQueues[floor];
+        if (q.length > 0) {
+          const hasSameDir = car.direction !== 0 && q.some((p) => p.dir === car.direction);
+          if (!hasSameDir) {
+            car.direction = q[0].dir;
+          }
+        } else {
+          let aboveCalls = false;
+          let belowCalls = false;
+          for (let f = floor + 1; f <= config.floors; f++) {
+            if (world.waitingQueues[f].length > 0) aboveCalls = true;
+          }
+          for (let f = 1; f < floor; f++) {
+            if (world.waitingQueues[f].length > 0) belowCalls = true;
+          }
+          if (car.direction === 1 && !aboveCalls && belowCalls) car.direction = -1;
+          else if (car.direction === -1 && !belowCalls && aboveCalls) car.direction = 1;
+          else if (!aboveCalls && !belowCalls) car.direction = 0;
+        }
+      }
+
+      const q = world.waitingQueues[floor];
+      const cap = config.carCapacity;
+      for (let i = 0; i < q.length && car.passengers.length < cap; ) {
+        if (car.direction === 0 || q[i].dir === car.direction) {
+          const boarded = q.splice(i, 1)[0];
+          if (car.direction === 0) car.direction = boarded.dir;
+          boarded.boardTime = simState.simTime;
+          car.passengers.push(boarded);
+          transfers++;
+        } else {
+          i++;
+        }
+      }
+
+      if (car.passengers.length > 0) {
+        recordTripBoarding(world, car);
+      }
+
+      if (transfers > 0 || car.passengers.length > 0) {
+        car.totalStops++;
+      }
+
+      const dwell = stopPenalty + transfers * 0.35;
+      car.dwellDuration = dwell;
+      car.dwellTimer = dwell;
+      car.state = 'DWELLING';
+    }
+
+    // --- 7b. Destination Dispatch Controller (Dynamic Express Clustering & En-Route Sweeping) ---
+    function pullClusterBatchAtLobby(world, car) {
+      const cap = config.carCapacity;
+      if (car.passengers.length >= cap) return 0;
+
+      const lobbyQ = world.waitingQueues[1];
+      if (lobbyQ.length === 0) return 0;
+
+      const isEligible = (p) =>
+        p.assignedCarId === car.id || !isCarAtFloorReady(world, p.assignedCarId, 1);
+
+      let otherReadyLobbyCars = 0;
+      for (let i = 0; i < world.cars.length; i++) {
+        const other = world.cars[i];
+        if (other.id !== car.id && isCarAtFloorReady(world, other.id, 1)) {
+          otherReadyLobbyCars++;
+        }
+      }
+
+      let boardedCount = 0;
+
+      if (car.passengers.length === 0) {
+        let seedIdx = -1;
+        for (let i = 0; i < lobbyQ.length; i++) {
+          if (isEligible(lobbyQ[i])) {
+            seedIdx = i;
+            break;
+          }
+        }
+        if (seedIdx === -1) return 0;
+
+        const seed = lobbyQ.splice(seedIdx, 1)[0];
+        seed.assignedCarId = car.id;
+        seed.boardTime = simState.simTime;
+        car.direction = seed.dir;
+        car.passengers.push(seed);
+        boardedCount++;
+      }
+
+      const healthyCount = Math.max(
+        1,
+        world.cars.filter((c) => !isCarUnderFireAlarm(c)).length
+      );
+      const baseZoneSpan = Math.max(2, Math.ceil((config.floors - 1) / healthyCount));
+      const lobbyHeavy = lobbyQ.length >= cap;
+      const maxSpan =
+        otherReadyLobbyCars > 0 && !lobbyHeavy
+          ? Math.max(2, baseZoneSpan - 1)
+          : baseZoneSpan + 1;
+      const maxUniqueStops =
+        otherReadyLobbyCars > 0 && !lobbyHeavy
+          ? Math.min(3, baseZoneSpan)
+          : Math.min(4, baseZoneSpan + 1);
+
+      while (car.passengers.length < cap) {
+        let minD = Infinity;
+        let maxD = -Infinity;
+        const stopSet = new Set();
+        for (let i = 0; i < car.passengers.length; i++) {
+          const d = car.passengers[i].dest;
+          stopSet.add(d);
+          if (d < minD) minD = d;
+          if (d > maxD) maxD = d;
+        }
+
+        let bestIdx = -1;
+        let bestScore = Infinity;
+
+        for (let i = 0; i < lobbyQ.length; i++) {
+          const p = lobbyQ[i];
+          if (!isEligible(p) || p.dir !== car.direction) continue;
+
+          const alreadyStop = stopSet.has(p.dest);
+          const newMin = Math.min(minD, p.dest);
+          const newMax = Math.max(maxD, p.dest);
+          const newSpan = newMax - newMin;
+          const newStops = stopSet.size + (alreadyStop ? 0 : 1);
+          const waitAge = simState.simTime - p.spawnTime;
+
+          if (!alreadyStop && waitAge < 18) {
+            if (newSpan > maxSpan || newStops > maxUniqueStops) {
+              continue;
+            }
+          }
+
+          const distFromBand =
+            p.dest < minD ? minD - p.dest : p.dest > maxD ? p.dest - maxD : 0;
+          const score =
+            (alreadyStop ? -22 : 0) +
+            distFromBand * 4.5 +
+            (newStops - stopSet.size) * 3.0 -
+            Math.min(10, waitAge * 0.25);
+
+          if (score < bestScore) {
+            bestScore = score;
+            bestIdx = i;
+          }
+        }
+
+        if (bestIdx === -1) break;
+
+        const chosen = lobbyQ.splice(bestIdx, 1)[0];
+        chosen.assignedCarId = car.id;
+        chosen.boardTime = simState.simTime;
+        car.passengers.push(chosen);
+        boardedCount++;
+      }
+
+      return boardedCount;
+    }
+
+    function adoptDownwardEnRouteCalls(world, car) {
+      const cap = config.carCapacity;
+      let reserved = car.passengers.length;
+      const topFloor = Math.min(config.floors, Math.floor(car.floor + 0.05));
+
+      for (let f = topFloor; f >= 2; f--) {
+        const q = world.waitingQueues[f];
+        for (let i = 0; i < q.length; i++) {
+          if (q[i].assignedCarId === car.id && q[i].dir === -1) reserved++;
+        }
+      }
+
+      for (let f = topFloor; f >= 2 && reserved < cap; f--) {
+        const q = world.waitingQueues[f];
+        for (let i = 0; i < q.length && reserved < cap; i++) {
+          const p = q[i];
+          if (p.dir !== -1 || p.assignedCarId === car.id) continue;
+
+          const assignedCar =
+            p.assignedCarId !== null ? world.cars[p.assignedCarId] : null;
+          const myEta = Math.abs(car.floor - f) / CRUISE_SPEED;
+          const otherEta = assignedCar
+            ? estimateCarEtaToFloor(world, assignedCar, f, -1)
+            : Infinity;
+
+          if (myEta + 2.0 < otherEta) {
+            p.assignedCarId = car.id;
+            reserved++;
+          }
+        }
+      }
+    }
+
+    function pickNextDestinationFloor(world, car, assignedWaiting) {
+      const cap = config.carCapacity;
+      const upBound = Math.ceil(car.floor - 0.02);
+      const downBound = Math.floor(car.floor + 0.02);
+
+      const dropStops = new Set();
+      for (const p of car.passengers) {
+        dropStops.add(p.dest);
+      }
+
+      const pickupStops = new Set();
+      if (!car.departing && car.passengers.length < cap) {
+        for (const p of assignedWaiting) {
+          if (car.departFloor !== -1 && p.origin === car.departFloor) continue;
+
+          if (car.passengers.length > 0) {
+            if (car.direction === 0 || p.dir === car.direction) {
+              pickupStops.add(p.origin);
+            }
+          } else if (car.direction === -1) {
+            if (p.origin === 1 || (p.dir === -1 && p.origin <= downBound)) {
+              pickupStops.add(p.origin);
+            }
+          } else {
+            pickupStops.add(p.origin);
+          }
+        }
+      }
+
+      // If onboard passengers exist, strictly complete current directional leg first
+      if (car.passengers.length > 0) {
+        const activeStops = new Set([...dropStops, ...pickupStops]);
+        if (car.direction === 1) {
+          let bestUp = Infinity;
+          for (const f of activeStops) {
+            if (f >= upBound && f < bestUp) bestUp = f;
+          }
+          if (bestUp !== Infinity) return bestUp;
+        }
+        if (car.direction === -1) {
+          let bestDown = -Infinity;
+          for (const f of activeStops) {
+            if (f <= downBound && f > bestDown) bestDown = f;
+          }
+          if (bestDown !== -Infinity) return bestDown;
+        }
+
+        let nearestDrop = null;
+        let minDist = Infinity;
+        for (const f of dropStops) {
+          const d = Math.abs(f - car.floor);
+          if (d < minDist) {
+            minDist = d;
+            nearestDrop = f;
+          }
+        }
+        return nearestDrop;
+      }
+
+      // Empty car descending: sweep downward calls en route to Floor 1
+      if (car.floor > 1.05 && (car.homing || car.direction === -1)) {
+        let highestDownBelow = -Infinity;
+        for (const p of assignedWaiting) {
+          if (p.dir === -1 && p.origin <= downBound && p.origin > highestDownBelow) {
+            highestDownBelow = p.origin;
+          }
+        }
+        if (highestDownBelow !== -Infinity) return highestDownBelow;
+        if (world.waitingQueues[1].length > 0 || car.homing) return 1;
+      }
+
+      // Empty car with assigned pickups: serve oldest assigned pickup first
+      if (assignedWaiting.length > 0) {
+        let oldest = assignedWaiting[0];
+        for (let i = 1; i < assignedWaiting.length; i++) {
+          if (assignedWaiting[i].spawnTime < oldest.spawnTime) {
+            oldest = assignedWaiting[i];
+          }
+        }
+        return oldest.origin;
+      }
+
+      // Proactive lobby homing unless in 5 PM down-peak with an empty lobby
+      if (
+        car.floor > 1.05 &&
+        (config.distributionMode !== 'downpeak' || world.waitingQueues[1].length > 0)
+      ) {
+        return 1;
+      }
+
+      return null;
+    }
+
+    function buildDestinationRoutePreview(car, assignedWaiting) {
+      const stops = new Set();
+      for (const p of car.passengers) stops.add(p.dest);
+      for (const p of assignedWaiting) {
+        stops.add(p.origin);
+        stops.add(p.dest);
+      }
+      return Array.from(stops).sort((a, b) => a - b);
+    }
+
+    function stepDestinationWorld(world, dt) {
+      const cars = world.cars;
+      const cap = config.carCapacity;
+      const stopPenalty = config.stopPenalty;
+
+      for (let i = 0; i < cars.length; i++) {
+        const car = cars[i];
+        if (isCarUnderFireAlarm(car)) {
+          stepFireRecallCar(world, car, dt);
+          continue;
+        }
+
+        let assignedWaiting = getAssignedPassengersForCar(world, car.id);
+
+        if (car.state === 'DWELLING') {
+          const curFloor = Math.round(car.floor);
+          const q = world.waitingQueues[curFloor];
+          let extraBoarded = 0;
+
+          if (!car.departing && car.passengers.length < cap) {
+            for (let k = 0; k < q.length && car.passengers.length < cap; ) {
+              const cand = q[k];
+              const dirOk =
+                car.passengers.length === 0 ||
+                car.direction === 0 ||
+                cand.dir === car.direction;
+              if (cand.assignedCarId === car.id && dirOk) {
+                const boarded = q.splice(k, 1)[0];
+                if (car.direction === 0) car.direction = boarded.dir;
+                boarded.boardTime = simState.simTime;
+                car.passengers.push(boarded);
+                extraBoarded++;
+              } else {
+                k++;
+              }
+            }
+
+            if (curFloor === 1 && car.passengers.length < cap) {
+              extraBoarded += pullClusterBatchAtLobby(world, car);
+            }
+          }
+
+          if (extraBoarded > 0) {
+            recordTripBoarding(world, car);
+            car.dwellTimer = Math.max(car.dwellTimer, extraBoarded * 0.35);
+          }
+
+          car.dwellTimer -= dt;
+
+          if (car.dwellTimer <= 0) {
+            car.dwellTimer = 0;
+
+            if (car.passengers.length > 0) {
+              car.departing = true;
+              car.departFloor = curFloor;
+              car.homing = false;
+            } else {
+              car.departing = false;
+              car.departFloor = -1;
+            }
+
+            if (
+              car.passengers.length < cap &&
+              curFloor > 1 &&
+              (car.passengers.length === 0 || car.direction === -1)
+            ) {
+              adoptDownwardEnRouteCalls(world, car);
+              assignedWaiting = getAssignedPassengersForCar(world, car.id);
+            }
+
+            const nextFloor = pickNextDestinationFloor(world, car, assignedWaiting);
+            if (nextFloor !== null && nextFloor !== curFloor) {
+              car.direction = nextFloor > car.floor ? 1 : -1;
+              car.state = 'MOVING';
+              world.totalMotorStarts++;
+              car.targetFloors = buildDestinationRoutePreview(car, assignedWaiting);
+            } else if (
+              car.passengers.length === 0 &&
+              curFloor > 1 &&
+              (config.distributionMode !== 'downpeak' || world.waitingQueues[1].length > 0)
+            ) {
+              car.homing = true;
+              car.direction = -1;
+              car.state = 'MOVING';
+              world.totalMotorStarts++;
+              car.targetFloors = [1];
+            } else {
+              car.direction = 0;
+              car.state = 'IDLE';
+              car.departing = false;
+              car.departFloor = -1;
+              car.targetFloors = [];
+            }
+          }
+          continue;
+        }
+
+        if (car.state === 'IDLE') {
+          if (Math.abs(car.floor - 1) < 0.05 && world.waitingQueues[1].length > 0) {
+            const hasUnservedLobby = world.waitingQueues[1].some(
+              (p) => p.assignedCarId === car.id || !isCarAtFloorReady(world, p.assignedCarId, 1)
+            );
+            if (hasUnservedLobby) {
+              car.floor = 1;
+              beginDestinationStop(world, car, 1, stopPenalty);
+              continue;
+            }
+          }
+
+          if (
+            car.passengers.length === 0 &&
+            car.floor > 1.05 &&
+            (config.distributionMode !== 'downpeak' || world.waitingQueues[1].length > 0)
+          ) {
+            adoptDownwardEnRouteCalls(world, car);
+            assignedWaiting = getAssignedPassengersForCar(world, car.id);
+            if (assignedWaiting.length === 0) {
+              car.homing = true;
+              car.direction = -1;
+              car.state = 'MOVING';
+              world.totalMotorStarts++;
+              car.targetFloors = [1];
+              continue;
+            }
+          }
+
+          const nextFloor = pickNextDestinationFloor(world, car, assignedWaiting);
+          if (nextFloor !== null) {
+            if (Math.abs(nextFloor - car.floor) < 0.05) {
+              car.floor = nextFloor;
+              beginDestinationStop(world, car, nextFloor, stopPenalty);
+            } else {
+              car.direction = nextFloor > car.floor ? 1 : -1;
+              car.state = 'MOVING';
+              world.totalMotorStarts++;
+              car.targetFloors = buildDestinationRoutePreview(car, assignedWaiting);
+            }
+          }
+          continue;
+        }
+
+        if (car.state === 'MOVING') {
+          if (car.departFloor !== -1 && Math.abs(car.floor - car.departFloor) > 0.25) {
+            car.departing = false;
+            car.departFloor = -1;
+          }
+
+          if (car.homing && Math.abs(car.floor - 1) < 0.05) {
+            car.homing = false;
+          }
+
+          if (car.passengers.length < cap && car.direction === -1 && car.floor > 1.5) {
+            adoptDownwardEnRouteCalls(world, car);
+            assignedWaiting = getAssignedPassengersForCar(world, car.id);
+          }
+
+          const nextFloor = pickNextDestinationFloor(world, car, assignedWaiting);
+          if (nextFloor === null) {
+            car.state = 'IDLE';
+            car.direction = 0;
+            car.departing = false;
+            car.departFloor = -1;
+            car.homing = false;
+            car.targetFloors = [];
+            continue;
+          }
+
+          car.targetFloors = buildDestinationRoutePreview(car, assignedWaiting);
+          const delta = nextFloor - car.floor;
+          if (Math.abs(delta) < 0.02) {
+            car.floor = nextFloor;
+            beginDestinationStop(world, car, nextFloor, stopPenalty);
+            continue;
+          }
+
+          car.direction = delta > 0 ? 1 : -1;
+          const stepDist = CRUISE_SPEED * dt;
+          if (Math.abs(delta) <= stepDist) {
+            world.totalDistanceFloors += Math.abs(delta);
+            car.floor = nextFloor;
+            beginDestinationStop(world, car, nextFloor, stopPenalty);
+          } else {
+            world.totalDistanceFloors += stepDist;
+            car.floor += car.direction * stepDist;
+          }
+        }
+      }
+    }
+
+    function beginDestinationStop(world, car, floor, stopPenalty) {
+      let transfers = 0;
+      let alighted = 0;
+
+      for (let i = car.passengers.length - 1; i >= 0; i--) {
+        const p = car.passengers[i];
+        if (p.dest === floor) {
+          car.passengers.splice(i, 1);
+          transfers++;
+          alighted++;
+          recordPassengerDelivery(world, p);
+        }
+      }
+
+      if (alighted > 0) {
+        addDeliveryEffect(world, car.id, floor, alighted);
+      }
+
+      const q = world.waitingQueues[floor];
+      const cap = config.carCapacity;
+
+      if (car.passengers.length === 0) {
+        car.inTrip = false;
+        car.tripPeakLoad = 0;
+
+        let firstAssigned = null;
+        for (let i = 0; i < q.length; i++) {
+          if (q[i].assignedCarId === car.id) {
+            firstAssigned = q[i];
+            break;
+          }
+        }
+        if (firstAssigned) {
+          car.direction = firstAssigned.dir;
+        } else if (floor === 1 && q.length > 0) {
+          car.direction = 1;
+        } else {
+          car.direction = 0;
+        }
+      }
+
+      for (let i = 0; i < q.length && car.passengers.length < cap; ) {
+        const cand = q[i];
+        if (
+          cand.assignedCarId === car.id &&
+          (car.direction === 0 || cand.dir === car.direction)
+        ) {
+          const boarded = q.splice(i, 1)[0];
+          if (car.direction === 0) car.direction = boarded.dir;
+          boarded.boardTime = simState.simTime;
+          car.passengers.push(boarded);
+          transfers++;
+        } else {
+          i++;
+        }
+      }
+
+      if (floor === 1 && car.passengers.length < cap) {
+        transfers += pullClusterBatchAtLobby(world, car);
+      }
+
+      if (car.passengers.length > 0) {
+        recordTripBoarding(world, car);
+      }
+
+      if (transfers > 0 || car.passengers.length > 0) {
+        car.totalStops++;
+      }
+
+      const dwell = stopPenalty + transfers * 0.35;
+      car.dwellDuration = dwell;
+      car.dwellTimer = dwell;
+      car.departing = false;
+      car.departFloor = -1;
+      car.homing = false;
+      car.state = 'DWELLING';
+    }
+
+    // --- 8. Queue-Inclusive Telemetry & Percentile Computation ---
+    function computePercentile(arr, pct) {
+      if (!arr || arr.length === 0) return 0;
+      const sorted = arr.slice().sort((a, b) => a - b);
+      const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * pct)));
+      return sorted[idx];
+    }
+
+    function computeWorldTelemetry(world) {
+      let waitingCount = 0;
+      let activeWaitSum = 0;
+      let maxCurrentWait = 0;
+
+      for (let f = 1; f < world.waitingQueues.length; f++) {
+        const q = world.waitingQueues[f];
+        waitingCount += q.length;
+        for (let i = 0; i < q.length; i++) {
+          const w = Math.max(0, simState.simTime - q[i].spawnTime);
+          activeWaitSum += w;
+          if (w > maxCurrentWait) maxCurrentWait = w;
+        }
+      }
+
+      let onboardCount = 0;
+      let onboardWaitSum = 0;
+      let onboardTravelSum = 0;
+      let onboardStopSum = 0;
+
+      for (const car of world.cars) {
+        for (const p of car.passengers) {
+          onboardCount++;
+          const wait = (p.boardTime ?? simState.simTime) - p.spawnTime;
+          const elapsedRide = Math.max(0, simState.simTime - (p.boardTime ?? simState.simTime));
+          const coveredFloors = Math.abs(car.floor - p.origin);
+          const directRideSoFar = coveredFloors / CRUISE_SPEED;
+          const stopSoFar = Math.max(0, elapsedRide - directRideSoFar);
+
+          onboardWaitSum += wait;
+          onboardTravelSum += directRideSoFar;
+          onboardStopSum += stopSoFar;
+        }
+      }
+
+      const sampleCount = world.completed.count + waitingCount + onboardCount;
+      const totalWait = world.completed.waitSum + activeWaitSum + onboardWaitSum;
+      const totalTravel = world.completed.travelSum + onboardTravelSum;
+      const totalStop = world.completed.stopSum + onboardStopSum;
+
+      const avgWait = sampleCount > 0 ? totalWait / sampleCount : 0;
+      const avgTravel = sampleCount > 0 ? totalTravel / sampleCount : 0;
+      const avgStop = sampleCount > 0 ? totalStop / sampleCount : 0;
+      const avgTTD = avgWait + avgTravel + avgStop;
+
+      const p50TTD = computePercentile(world.ttdSamples, 0.5);
+      const p95TTD = computePercentile(world.ttdSamples, 0.95);
+      const p95Wait = Math.max(computePercentile(world.waitSamples, 0.95), maxCurrentWait * 0.85);
+
+      // Rolling 120-second throughput (passengers delivered per minute)
+      const windowSec = 120;
+      const cutoff = simState.simTime - windowSec;
+      while (world.completionTimes.length > 0 && world.completionTimes[0] < cutoff) {
+        world.completionTimes.shift();
+      }
+      const effectiveWindow = Math.max(10, Math.min(windowSec, simState.simTime));
+      const throughput = (world.completionTimes.length / effectiveWindow) * 60;
+
+      let totalStops = 0;
+      let totalTrips = 0;
+      for (const car of world.cars) {
+        totalStops += car.totalStops;
+        totalTrips += car.trips;
+      }
+      const stopsPerTrip = totalTrips > 0 ? totalStops / totalTrips : 0;
+      const avgPaxPerTrip = totalTrips > 0 ? world.totalBoardedOnTrips / totalTrips : 0;
+      const utilizationPct = Math.min(100, (avgPaxPerTrip / config.carCapacity) * 100);
+
+      const served = world.completed.count;
+      const floorsPerPax = served > 0 ? world.totalDistanceFloors / served : 0;
+      const totalWh = world.totalDistanceFloors * 1.8 + world.totalMotorStarts * 4.5;
+      const whPerPax = served > 0 ? totalWh / served : 0;
+
+      const hist = world.queueHistory;
+      const growing = hist.length >= 10 && hist[hist.length - 1] > hist[hist.length - 10] + 3;
+      const saturated = !simState.fireAlarmActive && waitingCount >= 22 && growing;
+
+      return {
+        avgTTD,
+        avgWait,
+        avgTravel,
+        avgStop,
+        p50TTD,
+        p95TTD,
+        p95Wait,
+        maxCurrentWait,
+        stopsPerTrip,
+        totalStops,
+        avgPaxPerTrip,
+        utilizationPct,
+        floorsPerPax,
+        whPerPax,
+        waitingCount,
+        maxQueue: Math.max(world.maxQueue, waitingCount),
+        served,
+        throughput,
+        saturated,
+      };
+    }
+
+    // --- 9. Throttled DOM Telemetry, Sparkline & Deep Metrics Modal Updater (10Hz) ---
+    function updateTelemetryHUD() {
+      if (!simState) return;
+      const std = computeWorldTelemetry(simState.standard);
+      const dd = computeWorldTelemetry(simState.destination);
+
+      const mins = Math.floor(simState.simTime / 60);
+      const secs = Math.floor(simState.simTime % 60);
+      const clockText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      document.getElementById('simClockDisplay').textContent = clockText;
+
+      // Update Fire Alarm Recall banner status if active
+      if (simState.fireAlarmActive) {
+        const allCars = [...simState.standard.cars, ...simState.destination.cars];
+        const lockedCount = allCars.filter((c) => c.state === 'FIRE_LOCKED').length;
+        const totalCars = allCars.length;
+        const totalEvac = simState.standard.evacuatedCount + simState.destination.evacuatedCount;
+        const statusEl = document.getElementById('fireRecallStatusText');
+        if (statusEl) {
+          statusEl.textContent =
+            lockedCount < totalCars
+              ? `FIRE ALARM · RECALLING ${lockedCount}/${totalCars} AT LOBBY · ${totalEvac} EVAC`
+              : `FIRE ALARM · ALL ${totalCars} CARS LOCKED AT LOBBY · USE STAIRS`;
+        }
+      }
+
+      document.getElementById('stdAttd').textContent = `${std.avgTTD.toFixed(1)}s`;
+      document.getElementById('stdStopsTrip').textContent = std.stopsPerTrip.toFixed(1);
+      document.getElementById('stdQueue').textContent = std.waitingCount;
+      document.getElementById('stdWaitVal').textContent = `${Math.round(std.avgWait)}s`;
+      document.getElementById('stdP95Mini').textContent = `${Math.round(std.p95TTD)}s`;
+      document.getElementById('stdServed').textContent = std.served;
+
+      const stdThruEl = document.getElementById('stdThroughput');
+      stdThruEl.textContent = std.throughput.toFixed(1);
+      stdThruEl.className = std.saturated ? 'text-rose-400' : 'text-emerald-300';
+
+      const stdTot = Math.max(0.1, std.avgTTD);
+      document.getElementById('stdBarWait').style.width = `${(std.avgWait / stdTot) * 100}%`;
+      document.getElementById('stdBarTravel').style.width = `${(std.avgTravel / stdTot) * 100}%`;
+      document.getElementById('stdBarStop').style.width = `${(std.avgStop / stdTot) * 100}%`;
+
+      document.getElementById('stdSatBadge').classList.toggle('hidden', !std.saturated);
+
+      document.getElementById('ddAttd').textContent = `${dd.avgTTD.toFixed(1)}s`;
+      document.getElementById('ddStopsTrip').textContent = dd.stopsPerTrip.toFixed(1);
+      document.getElementById('ddQueue').textContent = dd.waitingCount;
+      document.getElementById('ddWaitVal').textContent = `${Math.round(dd.avgWait)}s`;
+      document.getElementById('ddP95Mini').textContent = `${Math.round(dd.p95TTD)}s`;
+      document.getElementById('ddServed').textContent = dd.served;
+
+      const ddThruEl = document.getElementById('ddThroughput');
+      ddThruEl.textContent = dd.throughput.toFixed(1);
+      ddThruEl.className = dd.saturated ? 'text-rose-400' : 'text-cyan-300';
+
+      const ddTot = Math.max(0.1, dd.avgTTD);
+      document.getElementById('ddBarWait').style.width = `${(dd.avgWait / ddTot) * 100}%`;
+      document.getElementById('ddBarTravel').style.width = `${(dd.avgTravel / ddTot) * 100}%`;
+      document.getElementById('ddBarStop').style.width = `${(dd.avgStop / ddTot) * 100}%`;
+
+      document.getElementById('ddSatBadge').classList.toggle('hidden', !dd.saturated);
+
+      const pill = document.getElementById('advantagePill');
+      if (std.avgTTD > 1 && dd.avgTTD > 1) {
+        const pctDelta = ((dd.avgTTD - std.avgTTD) / std.avgTTD) * 100;
+        const sign = pctDelta > 0 ? '+' : '';
+        pill.textContent = `DD: ${sign}${Math.round(pctDelta)}% ATTD`;
+        if (pctDelta <= -5) {
+          pill.className =
+            'px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 transition-colors';
+        } else if (pctDelta >= 5) {
+          pill.className =
+            'px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/35 transition-colors';
+        } else {
+          pill.className =
+            'px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700 transition-colors';
+        }
+      }
+
+      renderSparkline();
+
+      if (metricsModalOpen) {
+        updateMetricsModal(std, dd, clockText);
+      }
+    }
+
+    function updateMetricsModal(std, dd, clockText) {
+      const meta = PRESET_META[config.distributionMode] || PRESET_META.realistic;
+      document.getElementById('modalPresetDesc').textContent = simState.fireAlarmActive
+        ? '🚨 FIRE ALARM ACTIVE · Phase I Lobby Recall Across All Shafts'
+        : meta.desc;
+      document.getElementById('modalSampleClock').textContent = `Sim ${clockText}`;
+
+      const verdictEl = document.getElementById('modalVerdictText');
+      if (simState.fireAlarmActive) {
+        verdictEl.innerHTML = `<span class="text-rose-300 font-semibold">🚨 Fire Alarm Active:</span> All elevators recalled nonstop to Floor 1 &amp; locked out of service.`;
+      } else if (std.avgTTD > 1 && dd.avgTTD > 1) {
+        const ttdPct = Math.round(((dd.avgTTD - std.avgTTD) / std.avgTTD) * 100);
+        const energyPct = std.whPerPax > 0 ? Math.round(((dd.whPerPax - std.whPerPax) / std.whPerPax) * 100) : 0;
+        if (ttdPct <= -4) {
+          verdictEl.innerHTML = `<span class="text-emerald-300 font-semibold">Destination Dispatch leads</span> by <span class="font-mono text-emerald-200">${Math.abs(ttdPct)}%</span> faster TTD and <span class="font-mono text-cyan-200">${energyPct <= 0 ? Math.abs(energyPct) + '% less' : energyPct + '% more'}</span> energy/rider.`;
+        } else if (ttdPct >= 4) {
+          verdictEl.innerHTML = `<span class="text-amber-300 font-semibold">Standard SCAN leads</span> by <span class="font-mono text-amber-200">${ttdPct}%</span> faster TTD under current traffic load.`;
+        } else {
+          verdictEl.innerHTML = `<span class="text-slate-200 font-semibold">Neck-and-neck</span> (<span class="font-mono">${ttdPct > 0 ? '+' : ''}${ttdPct}%</span> TTD) · DD uses <span class="font-mono text-cyan-200">${energyPct}%</span> energy/rider.`;
+        }
+      }
+
+      const stdTot = Math.max(0.1, std.avgTTD);
+      document.getElementById('modalStdWaitBar').style.width = `${(std.avgWait / stdTot) * 100}%`;
+      document.getElementById('modalStdTravelBar').style.width = `${(std.avgTravel / stdTot) * 100}%`;
+      document.getElementById('modalStdStopBar').style.width = `${(std.avgStop / stdTot) * 100}%`;
+      document.getElementById('modalStdBreakdownText').textContent =
+        `W ${std.avgWait.toFixed(1)}s · R ${std.avgTravel.toFixed(1)}s · S ${std.avgStop.toFixed(1)}s`;
+
+      const ddTot = Math.max(0.1, dd.avgTTD);
+      document.getElementById('modalDdWaitBar').style.width = `${(dd.avgWait / ddTot) * 100}%`;
+      document.getElementById('modalDdTravelBar').style.width = `${(dd.avgTravel / ddTot) * 100}%`;
+      document.getElementById('modalDdStopBar').style.width = `${(dd.avgStop / ddTot) * 100}%`;
+      document.getElementById('modalDdBreakdownText').textContent =
+        `W ${dd.avgWait.toFixed(1)}s · R ${dd.avgTravel.toFixed(1)}s · S ${dd.avgStop.toFixed(1)}s`;
+
+      const fmtDelta = (sVal, dVal, lowerIsBetter = true, unit = '%') => {
+        if (sVal <= 0.001 && dVal <= 0.001) return '<span class="text-slate-500">—</span>';
+        const diff = dVal - sVal;
+        const pct = sVal > 0.001 ? (diff / sVal) * 100 : 0;
+        const good = lowerIsBetter ? diff < -0.05 : diff > 0.05;
+        const bad = lowerIsBetter ? diff > 0.05 : diff < -0.05;
+        const cls = good ? 'text-emerald-300' : bad ? 'text-rose-300' : 'text-slate-400';
+        const txt = unit === '%'
+          ? `${pct > 0 ? '+' : ''}${Math.round(pct)}%`
+          : `${diff > 0 ? '+' : ''}${diff.toFixed(1)}${unit}`;
+        return `<span class="${cls}">${txt}</span>`;
+      };
+
+      const rows = [
+        ['Mean TTD (Total)', `${std.avgTTD.toFixed(1)}s`, `${dd.avgTTD.toFixed(1)}s`, fmtDelta(std.avgTTD, dd.avgTTD, true)],
+        ['Median TTD (P50)', `${std.p50TTD.toFixed(1)}s`, `${dd.p50TTD.toFixed(1)}s`, fmtDelta(std.p50TTD, dd.p50TTD, true)],
+        ['Tail TTD (P95)', `${std.p95TTD.toFixed(1)}s`, `${dd.p95TTD.toFixed(1)}s`, fmtDelta(std.p95TTD, dd.p95TTD, true)],
+        ['Tail Queue Wait (P95)', `${std.p95Wait.toFixed(1)}s`, `${dd.p95Wait.toFixed(1)}s`, fmtDelta(std.p95Wait, dd.p95Wait, true)],
+        ['Live Max Wait (Rage)', `${std.maxCurrentWait.toFixed(0)}s`, `${dd.maxCurrentWait.toFixed(0)}s`, fmtDelta(std.maxCurrentWait, dd.maxCurrentWait, true, 's')],
+        ['Throughput (120s)', `${std.throughput.toFixed(1)}/m`, `${dd.throughput.toFixed(1)}/m`, fmtDelta(std.throughput, dd.throughput, false)],
+        ['Stops / Trip', `${std.stopsPerTrip.toFixed(2)}`, `${dd.stopsPerTrip.toFixed(2)}`, fmtDelta(std.stopsPerTrip, dd.stopsPerTrip, true)],
+        ['Car Utilization', `${Math.round(std.utilizationPct)}% (${std.avgPaxPerTrip.toFixed(1)})`, `${Math.round(dd.utilizationPct)}% (${dd.avgPaxPerTrip.toFixed(1)})`, fmtDelta(std.utilizationPct, dd.utilizationPct, false, 'pp')],
+        ['Shaft Mileage', `${std.floorsPerPax.toFixed(1)} fl/p`, `${dd.floorsPerPax.toFixed(1)} fl/p`, fmtDelta(std.floorsPerPax, dd.floorsPerPax, true)],
+        ['Est. Energy', `${std.whPerPax.toFixed(1)} Wh/p`, `${dd.whPerPax.toFixed(1)} Wh/p`, fmtDelta(std.whPerPax, dd.whPerPax, true)],
+        ['Queue (Now / Peak)', `${std.waitingCount} / ${std.maxQueue}`, `${dd.waitingCount} / ${dd.maxQueue}`, fmtDelta(std.waitingCount, dd.waitingCount, true, '')],
+        ['Total Delivered', `${std.served}`, `${dd.served}`, fmtDelta(std.served, dd.served, false)],
+      ];
+
+      document.getElementById('modalMetricsBody').innerHTML = rows
+        .map(
+          ([label, s, d, delta]) => `
+          <tr class="hover:bg-slate-900/50 transition-colors">
+            <td class="py-1.5 px-3 text-slate-300 font-sans font-medium">${label}</td>
+            <td class="py-1.5 px-2 text-right text-amber-200">${s}</td>
+            <td class="py-1.5 px-2 text-right text-cyan-200">${d}</td>
+            <td class="py-1.5 px-3 text-right font-semibold">${delta}</td>
+          </tr>`
+        )
+        .join('');
+
+      renderModalChart();
+    }
+
+    function renderModalChart() {
+      const canvas = document.getElementById('modalChartCanvas');
+      if (!canvas || !metricsModalOpen) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const targetW = Math.floor(rect.width * dpr);
+      const targetH = Math.floor(rect.height * dpr);
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w = rect.width;
+      const h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.strokeStyle = 'rgba(51, 65, 85, 0.35)';
+      ctx.lineWidth = 1;
+      for (let g = 1; g <= 3; g++) {
+        const gy = Math.round((h / 4) * g) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, gy);
+        ctx.lineTo(w, gy);
+        ctx.stroke();
+      }
+
+      const stdHist = simState.standard.queueHistory;
+      const ddHist = simState.destination.queueHistory;
+      if (stdHist.length < 2) return;
+
+      let maxQ = 10;
+      for (let i = 0; i < stdHist.length; i++) {
+        if (stdHist[i] > maxQ) maxQ = stdHist[i];
+        if (ddHist[i] > maxQ) maxQ = ddHist[i];
+      }
+      document.getElementById('modalChartMax').textContent = maxQ;
+
+      const drawAreaSeries = (arr, strokeColor, fillColor) => {
+        ctx.beginPath();
+        for (let i = 0; i < arr.length; i++) {
+          const x = (i / (arr.length - 1)) * w;
+          const y = h - 4 - (arr[i] / maxQ) * (h - 10);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+      };
+
+      drawAreaSeries(stdHist, '#fbbf24', 'rgba(251, 191, 36, 0.08)');
+      drawAreaSeries(ddHist, '#22d3ee', 'rgba(34, 211, 238, 0.10)');
+    }
+
+    function renderSparkline() {
+      const canvas = document.getElementById('sparklineCanvas');
+      if (!canvas || canvas.offsetParent === null) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const stdHist = simState.standard.queueHistory;
+      const ddHist = simState.destination.queueHistory;
+      if (stdHist.length < 2) return;
+
+      let maxQ = 10;
+      for (let i = 0; i < stdHist.length; i++) {
+        if (stdHist[i] > maxQ) maxQ = stdHist[i];
+        if (ddHist[i] > maxQ) maxQ = ddHist[i];
+      }
+      document.getElementById('sparkMaxLabel').textContent = maxQ;
+
+      const drawSeries = (arr, color) => {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        for (let i = 0; i < arr.length; i++) {
+          const x = (i / (arr.length - 1)) * w;
+          const y = h - 2 - (arr[i] / maxQ) * (h - 4);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      };
+
+      drawSeries(stdHist, '#fbbf24');
+      drawSeries(ddHist, '#22d3ee');
+    }
+
+    // --- 10. HiDPI 2D Canvas Building Renderer ---
+    const simCanvas = document.getElementById('simCanvas');
+    const simCtx = simCanvas.getContext('2d');
+    let canvasWidth = 0;
+    let canvasHeight = 0;
+
+    function resizeCanvases() {
+      const container = document.getElementById('canvasContainer');
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      canvasWidth = Math.max(300, rect.width);
+      canvasHeight = Math.max(200, rect.height);
+
+      simCanvas.width = Math.floor(canvasWidth * dpr);
+      simCanvas.height = Math.floor(canvasHeight * dpr);
+      simCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const spark = document.getElementById('sparklineCanvas');
+      if (spark) {
+        const sRect = spark.getBoundingClientRect();
+        if (sRect.width > 0 && sRect.height > 0) {
+          spark.width = Math.floor(sRect.width * dpr);
+          spark.height = Math.floor(sRect.height * dpr);
+        }
+      }
+    }
+
+    function renderSimulationCanvas() {
+      if (!simState || !simCtx) return;
+
+      const container = document.getElementById('canvasContainer');
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        if (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          (Math.abs(rect.width - canvasWidth) > 2 || Math.abs(rect.height - canvasHeight) > 2)
+        ) {
+          resizeCanvases();
+        }
+      }
+
+      const ctx = simCtx;
+      const W = canvasWidth;
+      const H = canvasHeight;
+      if (W <= 0 || H <= 0) return;
+
+      ctx.clearRect(0, 0, W, H);
+
+      const floors = config.floors;
+      const numCars = config.cars;
+
+      const topPad = 42;
+      const botPad = 12;
+      const sidePad = W < 480 ? 8 : 18;
+      const spineW = W < 480 ? 30 : 38;
+
+      const halfTowerW = (W - sidePad * 2 - spineW) / 2;
+      const queueZoneW = Math.max(42, Math.min(88, halfTowerW * 0.28));
+      const bankW = halfTowerW - queueZoneW;
+      const shaftW = bankW / numCars;
+
+      const usableH = H - topPad - botPad;
+      const floorH = usableH / floors;
+
+      const getFloorBottomY = (floorNum) => H - botPad - (floorNum - 1) * floorH;
+      const getFloorCenterY = (floorNum) => getFloorBottomY(floorNum) - floorH * 0.5;
+
+      const leftQueueX = sidePad;
+      const leftBankX = sidePad + queueZoneW;
+      const spineX = leftBankX + bankW;
+      const rightBankX = spineX + spineW;
+      const rightQueueX = rightBankX + bankW;
+
+      lastCanvasLayout = {
+        W,
+        H,
+        topPad,
+        botPad,
+        spineX,
+        spineW,
+        floorH,
+        floors,
+      };
+
+      const nowMs = performance.now();
+      const alarmStrobe = 0.5 + 0.5 * Math.sin(nowMs * 0.012);
+
+      // Ambient vignette (switches to subtle red strobe pulse during Fire Alarm)
+      const bgGrad = ctx.createRadialGradient(
+        W * 0.5,
+        H * 0.45,
+        20,
+        W * 0.5,
+        H * 0.5,
+        Math.max(W, H) * 0.72
+      );
+      if (simState.fireAlarmActive) {
+        bgGrad.addColorStop(0, `rgba(225, 29, 72, ${0.08 + alarmStrobe * 0.11})`);
+        bgGrad.addColorStop(1, 'rgba(9, 13, 22, 0)');
+      } else {
+        bgGrad.addColorStop(0, 'rgba(30, 41, 59, 0.22)');
+        bgGrad.addColorStop(1, 'rgba(9, 13, 22, 0)');
+      }
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      const presetMeta = PRESET_META[config.distributionMode] || PRESET_META.realistic;
+
+      // 1. Floor horizontal grid lines & hotspot highlighting
+      for (let f = 1; f <= floors; f++) {
+        const yBot = getFloorBottomY(f);
+        const yTop = yBot - floorH;
+
+        if (config.distributionMode !== 'uniform' && f === simState.hotspotFloor) {
+          ctx.fillStyle =
+            config.distributionMode === 'vip'
+              ? 'rgba(192, 132, 252, 0.08)'
+              : 'rgba(245, 158, 11, 0.06)';
+          ctx.fillRect(sidePad, yTop, W - sidePad * 2, floorH);
+        }
+
+        if (f === 1) {
+          ctx.fillStyle = simState.fireAlarmActive
+            ? `rgba(244, 63, 94, ${0.08 + alarmStrobe * 0.08})`
+            : 'rgba(56, 189, 248, 0.06)';
+          ctx.fillRect(sidePad, yTop, W - sidePad * 2, floorH);
+        }
+
+        ctx.strokeStyle =
+          f === 1
+            ? simState.fireAlarmActive
+              ? 'rgba(244, 63, 94, 0.55)'
+              : 'rgba(148, 163, 184, 0.3)'
+            : 'rgba(51, 65, 85, 0.34)';
+        ctx.lineWidth = f === 1 ? 1.5 : 1;
+        ctx.beginPath();
+        ctx.moveTo(sidePad, Math.round(yBot) + 0.5);
+        ctx.lineTo(W - sidePad, Math.round(yBot) + 0.5);
+        ctx.stroke();
+      }
+
+      // Active floor-tap spawn ripples
+      for (let r = simState.floorRipples.length - 1; r >= 0; r--) {
+        const rip = simState.floorRipples[r];
+        const age = (nowMs - rip.born) / rip.duration;
+        if (age >= 1) {
+          simState.floorRipples.splice(r, 1);
+          continue;
+        }
+        const yTop = getFloorBottomY(rip.floor) - floorH;
+        ctx.fillStyle = `rgba(56, 189, 248, ${(1 - age) * 0.24})`;
+        ctx.fillRect(sidePad, yTop, W - sidePad * 2, floorH);
+      }
+
+      // 2. Shared Center Floor Spine
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+      ctx.fillRect(spineX, topPad, spineW, usableH);
+
+      ctx.strokeStyle = simState.fireAlarmActive
+        ? `rgba(244, 63, 94, ${0.35 + alarmStrobe * 0.35})`
+        : 'rgba(71, 85, 105, 0.48)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(spineX + 0.5, topPad + 0.5, spineW - 1, usableH - 1);
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      let maxWeight = 1;
+      for (let f = 2; f <= floors; f++) {
+        if (simState.floorWeights[f] > maxWeight) maxWeight = simState.floorWeights[f];
+      }
+
+      for (let f = 1; f <= floors; f++) {
+        const yMid = getFloorCenterY(f);
+        const isHotspot = config.distributionMode !== 'uniform' && f === simState.hotspotFloor;
+
+        if (f >= 2 && config.distributionMode !== 'uniform') {
+          const wNorm = Math.min(1, simState.floorWeights[f] / maxWeight);
+          const barW = (spineW - 4) * wNorm;
+          ctx.fillStyle = isHotspot
+            ? config.distributionMode === 'vip'
+              ? 'rgba(192, 132, 252, 0.28)'
+              : 'rgba(245, 158, 11, 0.24)'
+            : 'rgba(56, 189, 248, 0.14)';
+          ctx.fillRect(spineX + (spineW - barW) / 2, yMid - floorH * 0.34, barW, floorH * 0.68);
+        }
+
+        ctx.font =
+          f === 1 || isHotspot
+            ? 'bold 10px JetBrains Mono, monospace'
+            : '10px JetBrains Mono, monospace';
+        ctx.fillStyle =
+          f === 1
+            ? simState.fireAlarmActive
+              ? '#fda4af'
+              : '#38bdf8'
+            : isHotspot
+              ? config.distributionMode === 'vip'
+                ? '#e879f9'
+                : '#fbbf24'
+              : '#94a3b8';
+        ctx.fillText(isHotspot ? `${f}${presetMeta.hotspotIcon}` : `${f}`, spineX + spineW / 2, yMid);
+      }
+
+      // 3. Render Left Tower (Standard) & Right Tower (Destination Dispatch)
+      renderBuildingTower({
+        ctx,
+        world: simState.standard,
+        bankX: leftBankX,
+        queueX: leftQueueX,
+        queueAlignRight: true,
+        shaftW,
+        queueZoneW,
+        topPad,
+        usableH,
+        floorH,
+        getFloorBottomY,
+        getFloorCenterY,
+        accentColor: '#fbbf24',
+        nowMs,
+        alarmStrobe,
+      });
+
+      renderBuildingTower({
+        ctx,
+        world: simState.destination,
+        bankX: rightBankX,
+        queueX: rightQueueX,
+        queueAlignRight: false,
+        shaftW,
+        queueZoneW,
+        topPad,
+        usableH,
+        floorH,
+        getFloorBottomY,
+        getFloorCenterY,
+        accentColor: '#22d3ee',
+        nowMs,
+        alarmStrobe,
+      });
+    }
+
+    function renderBuildingTower({
+      ctx,
+      world,
+      bankX,
+      queueX,
+      queueAlignRight,
+      shaftW,
+      queueZoneW,
+      topPad,
+      usableH,
+      floorH,
+      getFloorBottomY,
+      getFloorCenterY,
+      accentColor,
+      nowMs,
+      alarmStrobe,
+    }) {
+      const cars = world.cars;
+      const shaftLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+      // Draw elevator shafts, header labels, alarm strobes & stop ticks
+      for (let i = 0; i < cars.length; i++) {
+        const car = cars[i];
+        const sx = bankX + i * shaftW;
+        const underAlarm = isCarUnderFireAlarm(car);
+
+        // Shaft letter label above shaft top
+        ctx.font = 'bold 9px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = underAlarm ? '#fda4af' : accentColor;
+        ctx.globalAlpha = underAlarm ? 0.7 + alarmStrobe * 0.3 : 0.72;
+        ctx.fillText(shaftLetters[i] || `${i + 1}`, sx + shaftW * 0.5, topPad - 8);
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = underAlarm
+          ? `rgba(136, 19, 55, ${0.14 + alarmStrobe * 0.12})`
+          : i % 2 === 0
+            ? 'rgba(15, 23, 42, 0.48)'
+            : 'rgba(15, 23, 42, 0.26)';
+        ctx.fillRect(sx + 1, topPad, shaftW - 2, usableH);
+
+        ctx.strokeStyle = underAlarm
+          ? `rgba(244, 63, 94, ${0.32 + alarmStrobe * 0.35})`
+          : 'rgba(51, 65, 85, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(Math.round(sx + 1) + 0.5, topPad + 0.5, Math.round(shaftW - 2), usableH - 1);
+
+        // Top-of-shaft emergency strobe bar when Fire Alarm is active
+        if (underAlarm) {
+          ctx.fillStyle = `rgba(244, 63, 94, ${0.35 + alarmStrobe * 0.65})`;
+          ctx.fillRect(sx + 4, topPad + 2, shaftW - 8, 2.5);
+        }
+
+        if (!underAlarm) {
+          const activeStops = new Set(car.passengers.map((p) => p.dest));
+          for (const tf of car.targetFloors) {
+            const ty = getFloorCenterY(tf);
+            const isActiveNow = activeStops.has(tf) || world.type === 'standard';
+            ctx.fillStyle = accentColor;
+            ctx.globalAlpha = isActiveNow ? 0.65 : 0.22;
+            ctx.fillRect(sx + 4, ty - 1.5, shaftW - 8, isActiveNow ? 3 : 2);
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+
+      // Draw elevator hoist cables & cars
+      const carMarginX = Math.max(3, shaftW * 0.12);
+      const carW = Math.max(14, shaftW - carMarginX * 2);
+      const carH = Math.max(14, floorH * 0.8);
+
+      for (let i = 0; i < cars.length; i++) {
+        const car = cars[i];
+        const sxCenter = bankX + i * shaftW + shaftW * 0.5;
+        const cx = bankX + i * shaftW + carMarginX;
+        const cy = getFloorBottomY(car.floor) - floorH * 0.1 - carH;
+        const underAlarm = isCarUnderFireAlarm(car);
+
+        // Hoist cable from top of shaft to car roof
+        if (cy > topPad + 2) {
+          ctx.strokeStyle = underAlarm
+            ? `rgba(244, 63, 94, ${0.32 + alarmStrobe * 0.25})`
+            : 'rgba(100, 116, 139, 0.28)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(Math.round(sxCenter) + 0.5, topPad + 1);
+          ctx.lineTo(Math.round(sxCenter) + 0.5, cy);
+          ctx.stroke();
+        }
+
+        if (underAlarm) {
+          // Emergency recall / locked-out car styling
+          ctx.fillStyle = `rgba(244, 63, 94, ${0.12 + alarmStrobe * 0.12})`;
+          ctx.beginPath();
+          ctx.roundRect(cx - 2, cy - 2, carW + 4, carH + 4, 6);
+          ctx.fill();
+
+          ctx.fillStyle = car.state === 'FIRE_LOCKED' ? '#2c0f18' : '#3b101b';
+          ctx.strokeStyle = `rgba(244, 63, 94, ${0.55 + alarmStrobe * 0.45})`;
+          ctx.lineWidth = 1.7;
+          ctx.beginPath();
+          ctx.roundRect(cx, cy, carW, carH, 4);
+          ctx.fill();
+          ctx.stroke();
+
+          // Flashing strobe bar across top of car
+          ctx.fillStyle = alarmStrobe > 0.5 ? '#fb7185' : '#f97316';
+          ctx.fillRect(cx + 2, cy + 1.5, carW - 4, 2.2);
+
+          if (car.state === 'FIRE_RECALL') {
+            // Downward express recall chevron
+            ctx.fillStyle = '#fb7185';
+            const triY = cy + carH + 4;
+            ctx.beginPath();
+            ctx.moveTo(sxCenter, triY + 3.5);
+            ctx.lineTo(sxCenter - 3.5, triY - 1.5);
+            ctx.lineTo(sxCenter + 3.5, triY - 1.5);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            // Doors locked open at Floor 1 ("OUT")
+            ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
+            ctx.fillRect(cx + 1, cy + 4, carW * 0.16, carH - 5);
+            ctx.fillRect(cx + carW - 1 - carW * 0.16, cy + 4, carW * 0.16, carH - 5);
+
+            ctx.font = 'bold 7.5px JetBrains Mono, monospace';
+            ctx.fillStyle = '#fecdd3';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('OUT', cx + carW * 0.5, cy + carH * 0.58);
+          }
+        } else {
+          // Soft glow when doors are open & loading
+          if (car.state === 'DWELLING') {
+            ctx.fillStyle =
+              world.type === 'standard'
+                ? 'rgba(251, 191, 36, 0.10)'
+                : 'rgba(34, 211, 238, 0.12)';
+            ctx.beginPath();
+            ctx.roundRect(cx - 2, cy - 2, carW + 4, carH + 4, 6);
+            ctx.fill();
+          }
+
+          ctx.fillStyle = car.state === 'DWELLING' ? '#1e293b' : '#0f172a';
+          ctx.strokeStyle =
+            car.state === 'DWELLING'
+              ? accentColor
+              : car.state === 'MOVING'
+                ? '#94a3b8'
+                : '#475569';
+          ctx.lineWidth = car.state === 'DWELLING' ? 1.6 : 1.1;
+
+          ctx.beginPath();
+          ctx.roundRect(cx, cy, carW, carH, 4);
+          ctx.fill();
+          ctx.stroke();
+
+          // Directional motion chevron indicator on moving cars
+          if (car.state === 'MOVING' && car.direction !== 0) {
+            ctx.fillStyle = accentColor;
+            ctx.globalAlpha = 0.85;
+            const triY = car.direction === 1 ? cy - 4 : cy + carH + 4;
+            const dirSign = car.direction === 1 ? -1 : 1;
+            ctx.beginPath();
+            ctx.moveTo(sxCenter, triY + dirSign * 3);
+            ctx.lineTo(sxCenter - 3, triY - dirSign * 1.5);
+            ctx.lineTo(sxCenter + 3, triY - dirSign * 1.5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+
+          // Door split animation when dwelling
+          if (car.state === 'DWELLING' && car.dwellDuration > 0) {
+            const progress = 1 - car.dwellTimer / car.dwellDuration;
+            const openRatio = Math.sin(Math.min(1, progress) * Math.PI);
+            const panelW = (carW * 0.5) * (1 - openRatio * 0.82);
+
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.22)';
+            ctx.fillRect(cx + 1, cy + 1, panelW, carH - 2);
+            ctx.fillRect(cx + carW - 1 - panelW, cy + 1, panelW, carH - 2);
+          }
+        }
+
+        // Boarded passengers as destination-colored dots inside the car (including while recalling!)
+        const paxList = car.passengers;
+        if (paxList.length > 0) {
+          const cols = carW >= 26 ? 3 : 2;
+          const rows = Math.ceil(paxList.length / cols);
+          const dotR = Math.max(
+            1.8,
+            Math.min(3.1, (carW - 6) / (cols * 2.6), (carH - 4) / (rows * 2.6))
+          );
+          const cellW = (carW - 4) / cols;
+          const cellH = (carH - 4) / Math.max(2, rows);
+
+          for (let pIdx = 0; pIdx < paxList.length; pIdx++) {
+            const p = paxList[pIdx];
+            const col = pIdx % cols;
+            const row = Math.floor(pIdx / cols);
+            const px = cx + 2 + cellW * (col + 0.5);
+            const py = cy + carH - 2 - cellH * (row + 0.5);
+
+            ctx.beginPath();
+            ctx.arc(px, py, dotR, 0, Math.PI * 2);
+            ctx.fillStyle = p.color.fill;
+            ctx.fill();
+
+            if (p.color.isLobby) {
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 0.8;
+              ctx.stroke();
+            }
+          }
+        }
+      }
+
+      // Floating delivery & evacuation pops
+      for (let eIdx = world.deliveryEffects.length - 1; eIdx >= 0; eIdx--) {
+        const eff = world.deliveryEffects[eIdx];
+        const age = (nowMs - eff.born) / eff.duration;
+        if (age >= 1) {
+          world.deliveryEffects.splice(eIdx, 1);
+          continue;
+        }
+        const ex = bankX + eff.carId * shaftW + shaftW * 0.5;
+        const ey = getFloorCenterY(eff.floor) - age * 16;
+        ctx.font = 'bold 9px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (eff.labelPrefix === 'EVAC ') {
+          ctx.fillStyle = `rgba(253, 164, 175, ${1 - age})`;
+        } else {
+          ctx.fillStyle =
+            world.type === 'standard'
+              ? `rgba(253, 224, 71, ${1 - age})`
+              : `rgba(103, 232, 249, ${1 - age})`;
+        }
+        ctx.fillText(`${eff.labelPrefix}${eff.count}`, ex, ey);
+      }
+
+      // Draw waiting passenger queues per floor (with impatience pulse for wait >40s)
+      const maxVisibleDots = queueZoneW >= 68 ? 4 : 3;
+      const dotRadius = Math.max(2.3, Math.min(3.6, floorH * 0.16));
+      const dotSpacing = dotRadius * 2.4;
+      const pulsePhase = 0.5 + 0.5 * Math.sin(nowMs * 0.01);
+
+      for (let f = 1; f <= config.floors; f++) {
+        const q = world.waitingQueues[f];
+        if (q.length === 0) continue;
+
+        const yMid = getFloorCenterY(f);
+        const visibleCount = Math.min(q.length, maxVisibleDots);
+        const overflow = q.length - visibleCount;
+
+        for (let idx = 0; idx < visibleCount; idx++) {
+          const p = q[idx];
+          const dx = queueAlignRight
+            ? queueX + queueZoneW - 8 - idx * dotSpacing
+            : queueX + 8 + idx * dotSpacing;
+
+          const waitAge = simState.simTime - p.spawnTime;
+          if (waitAge > 40) {
+            ctx.beginPath();
+            ctx.arc(dx, yMid, dotRadius + 1.5 + pulsePhase * 1.4, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(244, 63, 94, ${0.45 + pulsePhase * 0.5})`;
+            ctx.lineWidth = 1.1;
+            ctx.stroke();
+          }
+
+          ctx.beginPath();
+          ctx.arc(dx, yMid, dotRadius, 0, Math.PI * 2);
+          ctx.fillStyle = p.color.fill;
+          ctx.fill();
+
+          if (p.color.isLobby) {
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 0.9;
+            ctx.stroke();
+          }
+        }
+
+        if (overflow > 0) {
+          const badgeText = `+${overflow}`;
+          ctx.font = 'bold 9px JetBrains Mono, monospace';
+          const textW = ctx.measureText(badgeText).width;
+          const badgeW = Math.max(18, textW + 7);
+          const badgeH = Math.min(13, floorH * 0.72);
+          const bx = queueAlignRight
+            ? queueX + queueZoneW - 8 - visibleCount * dotSpacing - badgeW + 2
+            : queueX + 8 + visibleCount * dotSpacing - 2;
+          const by = yMid - badgeH / 2;
+
+          ctx.fillStyle = overflow >= 10 ? '#e11d48' : '#334155';
+          ctx.beginPath();
+          ctx.roundRect(bx, by, badgeW, badgeH, 4);
+          ctx.fill();
+
+          ctx.fillStyle = '#f8fafc';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(badgeText, bx + badgeW / 2, yMid + 0.5);
+        }
+      }
+    }
+
+    // --- 11. Deterministic Fixed-Timestep Animation Loop ---
+    let lastFrameTime = performance.now();
+    let accumulator = 0;
+    let lastHudUpdate = 0;
+
+    function mainLoop(now) {
+      try {
+        const rawDelta = Math.min(0.1, Math.max(0, (now - lastFrameTime) / 1000));
+        lastFrameTime = now;
+
+        if (!playback.paused && simState) {
+          accumulator += rawDelta * playback.speed;
+          let safetySteps = 0;
+          while (accumulator >= FIXED_DT && safetySteps < 24) {
+            stepTwinSimulation(FIXED_DT);
+            accumulator -= FIXED_DT;
+            safetySteps++;
+          }
+          if (safetySteps >= 24) accumulator = 0;
+        }
+
+        renderSimulationCanvas();
+
+        if (now - lastHudUpdate >= 100) {
+          lastHudUpdate = now;
+          updateTelemetryHUD();
+        }
+      } catch (err) {
+        console.error('Main loop error:', err);
+      }
+
+      requestAnimationFrame(mainLoop);
+    }
+
+    // --- 12. Interactive Controls, Modal & Responsive Drawer Wiring ---
+    function openMetricsModal() {
+      const modal = document.getElementById('metricsModal');
+      if (!modal) return;
+      metricsModalOpen = true;
+      modal.classList.remove('hidden');
+      updateTelemetryHUD();
+    }
+
+    function closeMetricsModal() {
+      const modal = document.getElementById('metricsModal');
+      if (!modal) return;
+      metricsModalOpen = false;
+      modal.classList.add('hidden');
+    }
+
+    function handleCanvasTap(e) {
+      if (!lastCanvasLayout || !simState) return;
+      const rect = simCanvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const { H, topPad, botPad, spineX, spineW, floorH, floors } = lastCanvasLayout;
+      if (x >= spineX - 16 && x <= spineX + spineW + 16 && y >= topPad && y <= H - botPad) {
+        const floorNum = Math.max(1, Math.min(floors, Math.floor((H - botPad - y) / floorH) + 1));
+        spawnBurst(4, floorNum);
+        updateTelemetryHUD();
+      }
+    }
+
+    function bindControls() {
+      const btnPlayPause = document.getElementById('btnPlayPause');
+      const playPauseIcon = document.getElementById('playPauseIcon');
+      const playPauseLabel = document.getElementById('playPauseLabel');
+      const statusDot = document.getElementById('statusDot');
+
+      btnPlayPause.addEventListener('click', () => {
+        playback.paused = !playback.paused;
+        playPauseIcon.textContent = playback.paused ? '▶' : '⏸';
+        playPauseLabel.textContent = playback.paused ? 'Play' : 'Pause';
+        if (playback.paused) {
+          statusDot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        } else if (simState && simState.fireAlarmActive) {
+          statusDot.className = 'w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e] badge-saturated';
+        } else {
+          statusDot.className = 'w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]';
+        }
+      });
+
+      document.querySelectorAll('.speed-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          playback.speed = Number(btn.dataset.speed);
+          document.querySelectorAll('.speed-btn').forEach((b) => {
+            b.className =
+              'speed-btn h-full px-1.5 sm:px-2.5 rounded-md font-mono text-[11px] sm:text-xs font-semibold text-slate-400 hover:text-white transition-colors';
+          });
+          btn.className =
+            'speed-btn h-full px-1.5 sm:px-2.5 rounded-md font-mono text-[11px] sm:text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 transition-colors';
+        });
+      });
+
+      // 5 Time-of-Day & Scenario Presets
+      const activePresetCls =
+        'preset-btn shrink-0 px-2 py-0.5 sm:py-1 rounded-md font-medium transition-colors bg-cyan-500/20 text-cyan-300 border border-cyan-500/40';
+      const inactivePresetCls =
+        'preset-btn shrink-0 px-2 py-0.5 sm:py-1 rounded-md font-medium transition-colors text-slate-400 hover:text-slate-200 border border-transparent';
+
+      document.querySelectorAll('.preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const mode = btn.dataset.preset;
+          if (!mode || config.distributionMode === mode) return;
+          config.distributionMode = mode;
+          document.querySelectorAll('.preset-btn').forEach((b) => {
+            b.className = b.dataset.preset === mode ? activePresetCls : inactivePresetCls;
+          });
+          initSimulation(playback.seed, 65);
+          updateTelemetryHUD();
+        });
+      });
+
+      // Deep Analytics Modal Triggers
+      document.getElementById('btnOpenMetrics').addEventListener('click', openMetricsModal);
+      document.getElementById('btnCloseMetrics').addEventListener('click', closeMetricsModal);
+      document.getElementById('metricsModalBackdrop').addEventListener('click', closeMetricsModal);
+
+      ['stdHudCard', 'ddHudCard', 'sparkHudCard'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', openMetricsModal);
+        el.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            openMetricsModal();
+          }
+        });
+      });
+
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape' && metricsModalOpen) {
+          closeMetricsModal();
+        }
+      });
+
+      // Interactive Tap-a-Floor on Canvas Center Spine
+      simCanvas.addEventListener('click', handleCanvasTap);
+
+      // Building-Wide Fire Alarm Toggle
+      document.getElementById('btnFireAlarm').addEventListener('click', () => {
+        toggleFireAlarm();
+      });
+
+      document.getElementById('btnBurst').addEventListener('click', () => {
+        spawnBurst(12);
+        updateTelemetryHUD();
+      });
+
+      document.getElementById('btnReset').addEventListener('click', () => {
+        const freshSeed = (playback.seed + 7919) >>> 0;
+        initSimulation(freshSeed, 45);
+        updateTelemetryHUD();
+      });
+
+      const btnToggleSliders = document.getElementById('btnToggleSliders');
+      const slidersPanel = document.getElementById('slidersPanel');
+      const drawerChevron = document.getElementById('drawerChevron');
+      let drawerOpen = false;
+
+      btnToggleSliders.addEventListener('click', () => {
+        drawerOpen = !drawerOpen;
+        slidersPanel.classList.toggle('hidden', !drawerOpen);
+        slidersPanel.classList.toggle('grid', drawerOpen);
+        drawerChevron.textContent = drawerOpen ? '▼' : '▲';
+        setTimeout(resizeCanvases, 10);
+      });
+
+      const sliderArrival = document.getElementById('sliderArrival');
+      const valArrival = document.getElementById('valArrival');
+      sliderArrival.addEventListener('input', () => {
+        config.arrivalRate = Number(sliderArrival.value);
+        valArrival.textContent = `${config.arrivalRate} pax/m`;
+      });
+
+      const sliderFloors = document.getElementById('sliderFloors');
+      const valFloors = document.getElementById('valFloors');
+      sliderFloors.addEventListener('input', () => {
+        config.floors = Number(sliderFloors.value);
+        valFloors.textContent = `${config.floors} fl`;
+        initSimulation(playback.seed, 75);
+        updateTelemetryHUD();
+      });
+
+      const sliderCars = document.getElementById('sliderCars');
+      const valCars = document.getElementById('valCars');
+      sliderCars.addEventListener('input', () => {
+        config.cars = Number(sliderCars.value);
+        valCars.textContent = `${config.cars} cars`;
+        initSimulation(playback.seed, 75);
+        updateTelemetryHUD();
+      });
+
+      const sliderStopPenalty = document.getElementById('sliderStopPenalty');
+      const valStopPenalty = document.getElementById('valStopPenalty');
+      sliderStopPenalty.addEventListener('input', () => {
+        config.stopPenalty = Number(sliderStopPenalty.value);
+        valStopPenalty.textContent = `${config.stopPenalty.toFixed(1)}s`;
+      });
+
+      const sliderCapacity = document.getElementById('sliderCapacity');
+      const valCapacity = document.getElementById('valCapacity');
+      sliderCapacity.addEventListener('input', () => {
+        config.carCapacity = Number(sliderCapacity.value);
+        valCapacity.textContent = `${config.carCapacity} pax`;
+      });
+
+      window.addEventListener('resize', resizeCanvases);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          lastFrameTime = performance.now();
+          resizeCanvases();
+        }
+      });
+    }
+
+    // --- 13. Bootstrap ---
+    let booted = false;
+    function bootSimulation() {
+      if (booted) return;
+      booted = true;
+      try {
+        bindControls();
+        resizeCanvases();
+        initSimulation(playback.seed, 75);
+        updateTelemetryHUD();
+        renderSimulationCanvas();
+        setTimeout(resizeCanvases, 60);
+        requestAnimationFrame(mainLoop);
+      } catch (err) {
+        console.error('Simulation boot error:', err);
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootSimulation);
+    } else {
+      bootSimulation();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+import type { PlaybackState, SimConfig } from '../types/simulation';
+
+interface ControlDockProps {
+  config: SimConfig;
+  paused: boolean;
+  speed: PlaybackState['speed'];
+  fireAlarmActive: boolean;
+  drawerOpen: boolean;
+  onTogglePause: () => void;
+  onSelectSpeed: (speed: PlaybackState['speed']) => void;
+  onToggleFireAlarm: () => void;
+  onBurst: () => void;
+  onReset: () => void;
+  onToggleDrawer: () => void;
+  onConfigChange: (partial: Partial<SimConfig>, needsReinit: boolean) => void;
+}
+
+const SPEEDS: PlaybackState['speed'][] = [1, 3, 8];
+
+export function ControlDock({
+  config,
+  paused,
+  speed,
+  fireAlarmActive,
+  drawerOpen,
+  onTogglePause,
+  onSelectSpeed,
+  onToggleFireAlarm,
+  onBurst,
+  onReset,
+  onToggleDrawer,
+  onConfigChange,
+}: ControlDockProps) {
+  return (
+    <footer className="shrink-0 bg-slate-900/95 border-t border-slate-800 z-30 shadow-[0_-8px_24px_rgba(0,0,0,0.45)]">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-2.5 flex flex-col gap-2">
+        {/* Transport Bar */}
+        <div className="flex items-center justify-between gap-1 sm:gap-2 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={onTogglePause}
+              className="h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-[11px] sm:text-xs font-semibold text-slate-100 flex items-center gap-1 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            >
+              <span aria-hidden="true">{paused ? '▶' : '⏸'}</span>
+              <span className="hidden sm:inline">{paused ? 'Play' : 'Pause'}</span>
+            </button>
+
+            <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 h-9 sm:h-10 shrink-0">
+              {SPEEDS.map((s) => {
+                const active = speed === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => onSelectSpeed(s)}
+                    className={`h-full px-1.5 sm:px-2.5 rounded-md font-mono text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                      active
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                        : 'text-slate-400 hover:text-white border border-transparent'
+                    }`}
+                  >
+                    {s}x
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={onToggleFireAlarm}
+              title="Pull the building Fire Alarm to recall all elevators nonstop to Floor 1 and lock them out of service"
+              className={
+                fireAlarmActive
+                  ? 'h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-rose-600 hover:bg-rose-500 active:bg-rose-400 border border-rose-300 text-white font-bold text-[10.5px] sm:text-xs shadow-[0_0_14px_rgba(244,63,94,0.55)] transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300'
+                  : 'h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 border border-rose-500/50 text-rose-300 font-semibold text-[10.5px] sm:text-xs transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400'
+              }
+            >
+              <span aria-hidden="true">{fireAlarmActive ? '✅' : '🚨'}</span>
+              <span>{fireAlarmActive ? 'Clear Alarm' : 'Fire Alarm'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onBurst}
+              className="h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-400 text-slate-950 font-bold text-[10.5px] sm:text-xs shadow-sm transition-colors flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+            >
+              <span>
+                +12<span className="hidden sm:inline"> Burst</span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onReset}
+              title="Reset simulation with new seed"
+              className="h-9 sm:h-10 px-2 sm:px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-[10.5px] sm:text-xs font-medium text-slate-200 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            >
+              Reset
+            </button>
+
+            <button
+              type="button"
+              onClick={onToggleDrawer}
+              aria-expanded={drawerOpen}
+              className="md:hidden h-9 sm:h-10 px-2 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 text-[10.5px] sm:text-xs font-semibold text-cyan-300 flex items-center gap-1 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            >
+              <span>Sliders</span>
+              <span className="text-[10px]" aria-hidden="true">
+                {drawerOpen ? '▼' : '▲'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* 5 Core Parameter Sliders */}
+        <div
+          className={`${
+            drawerOpen ? 'grid' : 'hidden'
+          } md:grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-1.5 pt-1 border-t border-slate-800/80`}
+        >
+          <div className="flex flex-col justify-center min-h-[44px]">
+            <div className="flex items-center justify-between text-[11px]">
+              <label htmlFor="sliderArrival" className="text-slate-300 font-medium">
+                Arrival Rate
+              </label>
+              <span className="font-mono tabular-nums font-semibold text-cyan-300">
+                {config.arrivalRate} pax/m
+              </span>
+            </div>
+            <input
+              id="sliderArrival"
+              className="sim-slider"
+              type="range"
+              min={10}
+              max={90}
+              step={2}
+              value={config.arrivalRate}
+              onChange={(e) => onConfigChange({ arrivalRate: Number(e.target.value) }, false)}
+            />
+          </div>
+
+          <div className="flex flex-col justify-center min-h-[44px]">
+            <div className="flex items-center justify-between text-[11px]">
+              <label htmlFor="sliderFloors" className="text-slate-300 font-medium">
+                Building Floors
+              </label>
+              <span className="font-mono tabular-nums font-semibold text-cyan-300">
+                {config.floors} fl
+              </span>
+            </div>
+            <input
+              id="sliderFloors"
+              className="sim-slider"
+              type="range"
+              min={8}
+              max={24}
+              step={1}
+              value={config.floors}
+              onChange={(e) => onConfigChange({ floors: Number(e.target.value) }, true)}
+            />
+          </div>
+
+          <div className="flex flex-col justify-center min-h-[44px]">
+            <div className="flex items-center justify-between text-[11px]">
+              <label htmlFor="sliderCars" className="text-slate-300 font-medium">
+                Elevator Cars
+              </label>
+              <span className="font-mono tabular-nums font-semibold text-cyan-300">
+                {config.cars} cars
+              </span>
+            </div>
+            <input
+              id="sliderCars"
+              className="sim-slider"
+              type="range"
+              min={2}
+              max={5}
+              step={1}
+              value={config.cars}
+              onChange={(e) => onConfigChange({ cars: Number(e.target.value) }, true)}
+            />
+          </div>
+
+          <div className="flex flex-col justify-center min-h-[44px]">
+            <div className="flex items-center justify-between text-[11px]">
+              <label htmlFor="sliderStopPenalty" className="text-slate-300 font-medium">
+                Stop Penalty
+              </label>
+              <span className="font-mono tabular-nums font-semibold text-cyan-300">
+                {config.stopPenalty.toFixed(1)}s
+              </span>
+            </div>
+            <input
+              id="sliderStopPenalty"
+              className="sim-slider"
+              type="range"
+              min={2}
+              max={10}
+              step={0.5}
+              value={config.stopPenalty}
+              onChange={(e) => onConfigChange({ stopPenalty: Number(e.target.value) }, false)}
+            />
+          </div>
+
+          <div className="flex flex-col justify-center min-h-[44px]">
+            <div className="flex items-center justify-between text-[11px]">
+              <label htmlFor="sliderCapacity" className="text-slate-300 font-medium">
+                Car Capacity
+              </label>
+              <span className="font-mono tabular-nums font-semibold text-cyan-300">
+                {config.carCapacity} pax
+              </span>
+            </div>
+            <input
+              id="sliderCapacity"
+              className="sim-slider"
+              type="range"
+              min={4}
+              max={16}
+              step={1}
+              value={config.carCapacity}
+              onChange={(e) => onConfigChange({ carCapacity: Number(e.target.value) }, false)}
+            />
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
