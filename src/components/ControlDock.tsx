@@ -7,6 +7,7 @@ import {
   Play,
   RotateCcw,
   SlidersHorizontal,
+  Thermometer,
   Zap,
 } from 'lucide-react';
 import { memo } from 'react';
@@ -18,9 +19,11 @@ interface ControlDockProps {
   paused: boolean;
   speed: PlaybackState['speed'];
   fireAlarmActive: boolean;
+  showWaitHeatmap: boolean;
   drawerOpen: boolean;
   onTogglePause: () => void;
   onSelectSpeed: (speed: PlaybackState['speed']) => void;
+  onToggleWaitHeatmap: () => void;
   onToggleFireAlarm: () => void;
   onBurst: () => void;
   onReset: () => void;
@@ -35,9 +38,11 @@ export const ControlDock = memo(function ControlDock({
   paused,
   speed,
   fireAlarmActive,
+  showWaitHeatmap,
   drawerOpen,
   onTogglePause,
   onSelectSpeed,
+  onToggleWaitHeatmap,
   onToggleFireAlarm,
   onBurst,
   onReset,
@@ -89,6 +94,21 @@ export const ControlDock = memo(function ControlDock({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              aria-pressed={showWaitHeatmap}
+              onClick={onToggleWaitHeatmap}
+              title="Toggle floor wait-time heatmap (emerald to crimson by longest current passenger wait)"
+              className={
+                showWaitHeatmap
+                  ? 'h-10 px-2.5 sm:px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/30 border border-emerald-400/60 text-emerald-200 font-semibold text-[11px] sm:text-xs transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400'
+                  : 'h-10 px-2.5 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-slate-200 font-medium text-[11px] sm:text-xs transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400'
+              }
+            >
+              <Thermometer className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span>Wait Heat</span>
+            </button>
+
             <button
               type="button"
               onClick={onToggleFireAlarm}

@@ -13,6 +13,7 @@ export default function App() {
     paused,
     speed,
     telemetry,
+    showWaitHeatmap,
     announcement,
     containerRef,
     canvasRef,
@@ -21,6 +22,7 @@ export default function App() {
     handleSelectAlgorithm,
     handleTogglePause,
     handleSelectSpeed,
+    handleToggleWaitHeatmap,
     handleToggleFireAlarm,
     handleBurst,
     handleSpawnFloorBurst,
@@ -79,6 +81,7 @@ export default function App() {
         canvasRef={canvasRef}
         layoutRef={layoutRef}
         telemetry={telemetry}
+        showWaitHeatmap={showWaitHeatmap}
         onSpawnFloorBurst={handleSpawnFloorBurst}
         onHoverTargetChange={setCanvasHoverTarget}
         inspectTarget={inspectHoverTarget}
@@ -89,9 +92,11 @@ export default function App() {
         paused={paused}
         speed={speed}
         fireAlarmActive={telemetry.fireAlarmActive}
+        showWaitHeatmap={showWaitHeatmap}
         drawerOpen={drawerOpen}
         onTogglePause={handleTogglePause}
         onSelectSpeed={handleSelectSpeed}
+        onToggleWaitHeatmap={handleToggleWaitHeatmap}
         onToggleFireAlarm={handleToggleFireAlarm}
         onBurst={handleBurst}
         onReset={handleReset}

@@ -65,3 +65,20 @@ export function hitTestCanvas(
 
   return null;
 }
+
+export function getFloorFromCanvasPoint(x: number, y: number, layout: CanvasLayout): number | null {
+  const { H, topPad, botPad, leftQueueX, rightQueueX, queueZoneW, floorH, floors } = layout;
+
+  if (
+    floorH <= 0 ||
+    floors <= 0 ||
+    y < topPad ||
+    y > H - botPad ||
+    x < leftQueueX ||
+    x > rightQueueX + queueZoneW
+  ) {
+    return null;
+  }
+
+  return Math.max(1, Math.min(floors, Math.floor((H - botPad - y) / floorH) + 1));
+}

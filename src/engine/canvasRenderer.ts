@@ -6,6 +6,7 @@ import type {
   SimState,
 } from '../types/simulation';
 import { isCarUnderFireAlarm, PRESET_META } from './elevatorSim';
+import { computeWaitHeatmapSample } from './waitHeatmap';
 
 function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
@@ -48,6 +49,7 @@ interface TowerRenderOpts {
   alarmStrobe: number;
   reducedMotion: boolean;
   hoverTarget: CanvasHoverTarget | null;
+  showWaitHeatmap: boolean;
 }
 
 function renderBuildingTower({
@@ -70,6 +72,7 @@ function renderBuildingTower({
   alarmStrobe,
   reducedMotion,
   hoverTarget,
+  showWaitHeatmap,
 }: TowerRenderOpts) {
   const cars = world.cars;
   const shaftLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -114,6 +117,34 @@ function renderBuildingTower({
       ctx.fillStyle = `rgba(244, 63, 94, ${0.35 + alarmStrobe * 0.65})`;
       ctx.fillRect(sx + 4, topPad + 2, shaftW - 8, 2.5);
     }
+  }
+
+  if (showWaitHeatmap && !sim.fireAlarmActive) {
+    const bandX = Math.min(queueX, bankX);
+    const bandW = queueZoneW + shaftW * cars.length;
+    const bandH = Math.max(1, floorH - 2);
+    const edgeTickW = 2.5;
+    const edgeTickX = queueAlignRight ? queueX : queueX + queueZoneW - edgeTickW;
+
+    for (let f = 1; f <= cfg.floors; f++) {
+      const sample = computeWaitHeatmapSample(world.waitingQueues[f] ?? [], sim.simTime);
+      if (!sample.fillStyle) continue;
+
+      const yTop = getFloorBottomY(f) - floorH;
+      ctx.fillStyle = sample.fillStyle;
+      ctx.fillRect(bandX + 1, yTop + 1, Math.max(1, bandW - 2), bandH);
+
+      if (sample.edgeStyle) {
+        ctx.fillStyle = sample.edgeStyle;
+        ctx.fillRect(edgeTickX, yTop + 1, edgeTickW, bandH);
+      }
+    }
+  }
+
+  for (let i = 0; i < cars.length; i++) {
+    const car = cars[i];
+    const sx = bankX + i * shaftW;
+    const underAlarm = isCarUnderFireAlarm(car);
 
     if (!underAlarm) {
       if (
@@ -382,7 +413,8 @@ export function renderSimulationCanvas(
   logicalH: number,
   reducedMotion = false,
   hoverTarget: CanvasHoverTarget | null = null,
-  frameNowMs = typeof performance !== 'undefined' ? performance.now() : 0
+  frameNowMs = typeof performance !== 'undefined' ? performance.now() : 0,
+  showWaitHeatmap = true
 ): CanvasLayout | null {
   const ctx = canvas.getContext('2d');
   if (!ctx || logicalW <= 0 || logicalH <= 0) return null;
@@ -575,6 +607,7 @@ export function renderSimulationCanvas(
     alarmStrobe,
     reducedMotion,
     hoverTarget,
+    showWaitHeatmap,
   });
 
   renderBuildingTower({
@@ -597,6 +630,7 @@ export function renderSimulationCanvas(
     alarmStrobe,
     reducedMotion,
     hoverTarget,
+    showWaitHeatmap,
   });
 
   return layout;

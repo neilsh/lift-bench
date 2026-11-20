@@ -1,7 +1,12 @@
 import { Flame } from 'lucide-react';
 import { memo, useRef, useState } from 'react';
 import type { KeyboardEvent, MouseEvent, RefObject } from 'react';
-import { hitTestCanvas, isSameHoverTarget } from '../engine/canvasGeometry';
+import {
+  getFloorFromCanvasPoint,
+  hitTestCanvas,
+  isSameHoverTarget,
+} from '../engine/canvasGeometry';
+import { formatWaitSeverityLabel } from '../engine/waitHeatmap';
 import type {
   CanvasHoverTarget,
   CanvasLayout,
@@ -14,6 +19,7 @@ interface SimCanvasStageProps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   layoutRef: RefObject<CanvasLayout | null>;
   telemetry: TelemetrySnapshot;
+  showWaitHeatmap: boolean;
   onSpawnFloorBurst: (floor: number) => void;
   onHoverTargetChange: (target: CanvasHoverTarget | null) => void;
   inspectTarget: (target: CanvasHoverTarget | null) => HoverInspection | null;
@@ -24,6 +30,7 @@ export const SimCanvasStage = memo(function SimCanvasStage({
   canvasRef,
   layoutRef,
   telemetry,
+  showWaitHeatmap,
   onSpawnFloorBurst,
   onHoverTargetChange,
   inspectTarget,
@@ -62,9 +69,8 @@ export const SimCanvasStage = memo(function SimCanvasStage({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const { H, topPad, botPad, spineX, spineW, floorH, floors } = layout;
-    if (x >= spineX - 16 && x <= spineX + spineW + 16 && y >= topPad && y <= H - botPad) {
-      const floorNum = Math.max(1, Math.min(floors, Math.floor((H - botPad - y) / floorH) + 1));
+    const floorNum = getFloorFromCanvasPoint(x, y, layout);
+    if (floorNum !== null) {
       onSpawnFloorBurst(floorNum);
     }
   };
@@ -78,12 +84,7 @@ export const SimCanvasStage = memo(function SimCanvasStage({
 
   const inspection = hoverTarget ? inspectTarget(hoverTarget) : null;
 
-  const cursorClass =
-    hoverTarget?.kind === 'spine'
-      ? 'cursor-pointer'
-      : hoverTarget
-        ? 'cursor-crosshair'
-        : 'cursor-default';
+  const cursorClass = hoverTarget ? 'cursor-pointer' : 'cursor-default';
 
   const recallStatusText =
     telemetry.lockedCount < telemetry.totalCars
@@ -102,8 +103,8 @@ export const SimCanvasStage = memo(function SimCanvasStage({
         onMouseLeave={handlePointerLeave}
         onClick={handleCanvasClick}
         onKeyDown={handleCanvasKeyDown}
-        className={`block w-full h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400 ${cursorClass}`}
-        aria-label="Twin-tower elevator dispatch simulation canvas. Click any floor number on the center spine to spawn 4 passengers, or press Enter while focused to spawn 4 lobby passengers."
+        className={`block w-full h-full touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400 ${cursorClass}`}
+        aria-label="Twin-tower elevator dispatch simulation canvas. Tap or click any floor to spawn 4 passengers, or press Enter while focused to spawn 4 lobby passengers."
       />
 
       {!telemetry.fireAlarmActive ? (
@@ -141,7 +142,33 @@ export const SimCanvasStage = memo(function SimCanvasStage({
           <span className="hidden md:inline text-slate-700" aria-hidden="true">
             ·
           </span>
-          <span className="hidden md:inline text-slate-400">Tap floor # to spawn +4</span>
+          <span className="hidden md:inline text-slate-400">Tap any floor to spawn +4</span>
+          {showWaitHeatmap && (
+            <>
+              <span className="text-slate-700" aria-hidden="true">
+                |
+              </span>
+              <span
+                className="flex items-center gap-1 font-mono tabular-nums text-[10px]"
+                aria-label="Wait-time heatmap scale: 0 seconds emerald, 20 seconds amber, 45 seconds or more crimson"
+              >
+                <span className="text-slate-400 hidden sm:inline">Max Wait</span>
+                <span className="text-emerald-300">0s</span>
+                <span
+                  className="inline-block w-6 sm:w-8 h-1.5 rounded-l-sm"
+                  style={{ background: 'linear-gradient(90deg, #10b981, #f59e0b)' }}
+                  aria-hidden="true"
+                />
+                <span className="text-amber-300">20s</span>
+                <span
+                  className="inline-block w-6 sm:w-8 h-1.5 rounded-r-sm"
+                  style={{ background: 'linear-gradient(90deg, #f59e0b, #e11d48)' }}
+                  aria-hidden="true"
+                />
+                <span className="text-rose-300">45s+</span>
+              </span>
+            </>
+          )}
         </div>
       ) : (
         <div className="pointer-events-none absolute top-1.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-rose-950/95 border border-rose-500/80 px-3 py-0.5 rounded-md text-[10px] sm:text-xs font-mono font-bold tabular-nums text-rose-200 whitespace-nowrap">
@@ -181,25 +208,43 @@ export const SimCanvasStage = memo(function SimCanvasStage({
 
           {inspection.kind === 'floor' && (
             <div className="flex flex-col gap-0.5">
-              <div
-                className={`font-bold ${
-                  inspection.side === 'left' ? 'text-amber-300' : 'text-cyan-300'
-                }`}
-              >
-                {inspection.side === 'left' ? 'Left' : 'Right'} · Floor {inspection.floor}
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className={`font-bold ${
+                    inspection.side === 'left' ? 'text-amber-300' : 'text-cyan-300'
+                  }`}
+                >
+                  {inspection.side === 'left' ? 'Left' : 'Right'} · Floor {inspection.floor}
+                </span>
+                {showWaitHeatmap && (
+                  <span
+                    className={`font-semibold ${
+                      inspection.severity === 'critical'
+                        ? 'text-rose-300'
+                        : inspection.severity === 'elevated'
+                          ? 'text-amber-300'
+                          : inspection.severity === 'nominal'
+                            ? 'text-emerald-300'
+                            : 'text-slate-400'
+                    }`}
+                  >
+                    {formatWaitSeverityLabel(inspection.severity)}
+                  </span>
+                )}
               </div>
               <div className="text-slate-300">
                 Waiting: <strong className="text-slate-100">{inspection.waitingCount}</strong> · Max
                 Wait:{' '}
                 <strong className="text-slate-100">{inspection.longestWaitSec.toFixed(0)}s</strong>
               </div>
+              <div className="text-[10px] text-slate-400">Tap floor to spawn +4</div>
             </div>
           )}
 
           {inspection.kind === 'spine' && (
             <div className="flex flex-col gap-0.5">
               <div className="font-bold text-sky-300">
-                Floor {inspection.floor} · Click to spawn +4
+                Floor {inspection.floor} · Tap to spawn +4
               </div>
               <div className="text-slate-400">
                 Queues: L <strong className="text-amber-300">{inspection.leftWaiting}</strong> · R{' '}

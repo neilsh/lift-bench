@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hitTestCanvas, isSameHoverTarget } from '../canvasGeometry';
+import { getFloorFromCanvasPoint, hitTestCanvas, isSameHoverTarget } from '../canvasGeometry';
 import type { CanvasLayout } from '../../types/simulation';
 
 const SAMPLE_LAYOUT: CanvasLayout = {
@@ -26,6 +26,28 @@ describe('Canvas Geometry & Hit-Testing', () => {
   it('returns null outside the vertical floor bounds', () => {
     expect(hitTestCanvas(400, 10, SAMPLE_LAYOUT)).toBeNull();
     expect(hitTestCanvas(400, 595, SAMPLE_LAYOUT)).toBeNull();
+  });
+
+  it('maps floor taps across queues, shafts, and spine while rejecting outer margins', () => {
+    const floor1Y = SAMPLE_LAYOUT.H - SAMPLE_LAYOUT.botPad - SAMPLE_LAYOUT.floorH * 0.5;
+    const floor5Y = SAMPLE_LAYOUT.H - SAMPLE_LAYOUT.botPad - SAMPLE_LAYOUT.floorH * 4.5;
+    const floor14Y = SAMPLE_LAYOUT.topPad + SAMPLE_LAYOUT.floorH * 0.5;
+
+    // Left queue, left shaft, center spine, right shaft, right queue all resolve to floor 5
+    expect(getFloorFromCanvasPoint(SAMPLE_LAYOUT.leftQueueX + 10, floor5Y, SAMPLE_LAYOUT)).toBe(5);
+    expect(getFloorFromCanvasPoint(SAMPLE_LAYOUT.leftBankX + 20, floor5Y, SAMPLE_LAYOUT)).toBe(5);
+    expect(getFloorFromCanvasPoint(400, floor5Y, SAMPLE_LAYOUT)).toBe(5);
+    expect(getFloorFromCanvasPoint(SAMPLE_LAYOUT.rightBankX + 20, floor5Y, SAMPLE_LAYOUT)).toBe(5);
+    expect(getFloorFromCanvasPoint(SAMPLE_LAYOUT.rightQueueX + 10, floor5Y, SAMPLE_LAYOUT)).toBe(5);
+
+    expect(getFloorFromCanvasPoint(400, floor1Y, SAMPLE_LAYOUT)).toBe(1);
+    expect(getFloorFromCanvasPoint(400, floor14Y, SAMPLE_LAYOUT)).toBe(14);
+
+    // Rejects outside horizontal margins or vertical pads
+    expect(getFloorFromCanvasPoint(5, floor5Y, SAMPLE_LAYOUT)).toBeNull();
+    expect(getFloorFromCanvasPoint(795, floor5Y, SAMPLE_LAYOUT)).toBeNull();
+    expect(getFloorFromCanvasPoint(400, 10, SAMPLE_LAYOUT)).toBeNull();
+    expect(getFloorFromCanvasPoint(400, 595, SAMPLE_LAYOUT)).toBeNull();
   });
 
   it('detects spine clicks and maps Y coordinates to exact floor numbers', () => {

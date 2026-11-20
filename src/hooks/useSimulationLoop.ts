@@ -13,6 +13,7 @@ import {
   stepTwinSimulation,
   toggleFireAlarmState,
 } from '../engine/elevatorSim';
+import { classifyWaitSeverity, getFloorLongestWaitSec } from '../engine/waitHeatmap';
 import type {
   CanvasHoverTarget,
   CanvasLayout,
@@ -62,6 +63,7 @@ export function useSimulationLoop() {
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState<PlaybackState['speed']>(3);
   const [telemetry, setTelemetry] = useState<TelemetrySnapshot>(boot.telemetry);
+  const [showWaitHeatmap, setShowWaitHeatmap] = useState(true);
   const [announcement, setAnnouncement] = useState('');
 
   const configRef = useRef<SimConfig>(boot.cfg);
@@ -78,6 +80,7 @@ export function useSimulationLoop() {
   const canvasSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   const hoverTargetRef = useRef<CanvasHoverTarget | null>(null);
   const reducedMotionRef = useRef(false);
+  const showWaitHeatmapRef = useRef(true);
 
   const resizeCanvas = useCallback(() => {
     const container = containerRef.current;
@@ -176,7 +179,8 @@ export function useSimulationLoop() {
           canvasSizeRef.current.height,
           reducedMotionRef.current,
           hoverTargetRef.current,
-          now
+          now,
+          showWaitHeatmapRef.current
         );
         if (nextLayout) layoutRef.current = nextLayout;
       }
@@ -239,6 +243,15 @@ export function useSimulationLoop() {
     playbackRef.current.speed = nextSpeed;
     setSpeed(nextSpeed);
     setAnnouncement(`Playback speed set to ${nextSpeed}x.`);
+  }, []);
+
+  const handleToggleWaitHeatmap = useCallback(() => {
+    const next = !showWaitHeatmapRef.current;
+    showWaitHeatmapRef.current = next;
+    setShowWaitHeatmap(next);
+    setAnnouncement(
+      next ? 'Floor wait-time heatmap enabled.' : 'Floor wait-time heatmap disabled.'
+    );
   }, []);
 
   const handleToggleFireAlarm = useCallback(() => {
@@ -326,17 +339,14 @@ export function useSimulationLoop() {
       }
 
       const q = world.waitingQueues[target.floor] ?? [];
-      let longest = 0;
-      for (let i = 0; i < q.length; i++) {
-        const wait = Math.max(0, sim.simTime - q[i].spawnTime);
-        if (wait > longest) longest = wait;
-      }
+      const longest = getFloorLongestWaitSec(q, sim.simTime);
       return {
         kind: 'floor',
         side: target.side,
         floor: target.floor,
         waitingCount: q.length,
         longestWaitSec: longest,
+        severity: classifyWaitSeverity(longest, q.length > 0),
       };
     },
     []
@@ -347,6 +357,7 @@ export function useSimulationLoop() {
     paused,
     speed,
     telemetry,
+    showWaitHeatmap,
     announcement,
     containerRef,
     canvasRef,
@@ -356,6 +367,7 @@ export function useSimulationLoop() {
     handleSelectAlgorithm,
     handleTogglePause,
     handleSelectSpeed,
+    handleToggleWaitHeatmap,
     handleToggleFireAlarm,
     handleBurst,
     handleSpawnFloorBurst,

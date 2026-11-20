@@ -202,6 +202,16 @@ export type CanvasHoverTarget =
   | { kind: 'floor'; side: TowerSide; floor: number }
   | { kind: 'spine'; floor: number };
 
+export type WaitHeatmapSeverity = 'idle' | 'nominal' | 'elevated' | 'critical';
+
+export interface WaitHeatmapSample {
+  longestWaitSec: number;
+  intensity: number;
+  severity: WaitHeatmapSeverity;
+  fillStyle: string | null;
+  edgeStyle: string | null;
+}
+
 export type HoverInspection =
   | {
       kind: 'car';
@@ -219,6 +229,7 @@ export type HoverInspection =
       floor: number;
       waitingCount: number;
       longestWaitSec: number;
+      severity: WaitHeatmapSeverity;
     }
   | {
       kind: 'spine';
