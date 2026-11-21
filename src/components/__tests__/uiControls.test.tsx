@@ -219,6 +219,7 @@ describe('ControlDock & TelemetryHud & SimCanvasStage', () => {
     const onSelectAlgorithm = vi.fn();
     const onOpenMetrics = vi.fn();
     const onOpenGuide = vi.fn();
+    const onOpenShortcuts = vi.fn();
 
     render(
       <TelemetryHud
@@ -231,6 +232,7 @@ describe('ControlDock & TelemetryHud & SimCanvasStage', () => {
         onSelectAlgorithm={onSelectAlgorithm}
         onOpenMetrics={onOpenMetrics}
         onOpenGuide={onOpenGuide}
+        onOpenShortcuts={onOpenShortcuts}
       />
     );
 
@@ -249,9 +251,67 @@ describe('ControlDock & TelemetryHud & SimCanvasStage', () => {
     await user.click(screen.getByRole('button', { name: 'Metrics' }));
     expect(onOpenMetrics).toHaveBeenCalledTimes(1);
 
+    await user.click(screen.getByRole('button', { name: 'Keyboard shortcuts' }));
+    expect(onOpenShortcuts).toHaveBeenCalledTimes(1);
+
     const githubLink = screen.getByRole('link', { name: /View LiftBench source on GitHub/i });
     expect(githubLink).toHaveAttribute('target', '_blank');
     expect(githubLink).toHaveAttribute('rel', 'noopener noreferrer');
     expect(githubLink.getAttribute('href')).toMatch(/^https:\/\/github\.com\//);
+  });
+
+  it('supports global keyboard shortcuts in App while respecting focused controls, open modals, and modifiers', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(screen.queryByText('Paused')).not.toBeInTheDocument();
+    await user.keyboard(' ');
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+    await user.keyboard(' ');
+    expect(screen.queryByText('Paused')).not.toBeInTheDocument();
+
+    await user.keyboard('1');
+    expect(screen.getByRole('button', { name: '1x' })).toHaveAttribute('aria-pressed', 'true');
+    await user.keyboard('3');
+    expect(screen.getByRole('button', { name: '8x' })).toHaveAttribute('aria-pressed', 'true');
+
+    const waitHeatBtn = screen.getByRole('button', { name: /Wait Heat/i });
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'true');
+    await user.keyboard('h');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'false');
+
+    // Focusing <canvas> or a <button> allows letter shortcuts like 'h', while Space on canvas does not toggle pause
+    const canvasEl = screen.getByLabelText(/Twin-tower elevator dispatch simulation canvas/i);
+    canvasEl.focus();
+    await user.keyboard(' ');
+    expect(screen.queryByText('Paused')).not.toBeInTheDocument();
+    await user.keyboard('h');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'true');
+
+    waitHeatBtn.focus();
+    await user.keyboard('h');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'false');
+
+    // Pressing 'h' while a modal is open does NOT toggle Wait Heat
+    await user.keyboard('?');
+    expect(screen.getByRole('dialog', { name: 'Keyboard Shortcuts' })).toBeInTheDocument();
+    await user.keyboard('h');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'false');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Keyboard Shortcuts' })).not.toBeInTheDocument();
+
+    // Pressing 'h' with a modifier does NOT toggle Wait Heat
+    await user.keyboard('{Control>}h{/Control}');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'false');
+
+    const arrivalInput = screen.getByLabelText('Arrival Rate');
+    arrivalInput.focus();
+    await user.keyboard('h');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'false');
+
+    const leftAlgoSelect = screen.getByLabelText('Left tower dispatch algorithm');
+    leftAlgoSelect.focus();
+    await user.keyboard('h');
+    expect(waitHeatBtn).toHaveAttribute('aria-pressed', 'false');
   });
 });

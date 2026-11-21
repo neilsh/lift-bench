@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { buildTelemetrySnapshot, createSimulation, DEFAULT_CONFIG } from '../../engine/elevatorSim';
 import { AlgorithmGuideModal } from '../AlgorithmGuideModal';
 import { ErrorBoundary } from '../ErrorBoundary';
+import { KeyboardShortcutsModal } from '../KeyboardShortcutsModal';
 import { MetricsModal } from '../MetricsModal';
 
 function Thrower({ shouldThrow }: { shouldThrow: boolean }) {
@@ -56,6 +57,32 @@ describe('Modals & ErrorBoundary', () => {
 
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders KeyboardShortcutsModal, focuses close button, traps Tab focus, and closes on Escape or button click', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+
+    render(<KeyboardShortcutsModal open={true} onClose={onClose} />);
+
+    const dialog = screen.getByRole('dialog', { name: 'Keyboard Shortcuts' });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText('Keyboard Shortcuts')).toBeInTheDocument();
+    expect(screen.getByText('Close active dialog')).toBeInTheDocument();
+
+    const closeButtons = screen.getAllByLabelText('Close keyboard shortcuts');
+    const closeBtn = closeButtons[closeButtons.length - 1];
+    await waitFor(() => expect(closeBtn).toHaveFocus());
+
+    await user.tab();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    expect(closeBtn).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await user.click(closeBtn);
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 
   it('renders 4-tab Telemetry Studio MetricsModal, switches tabs/charts, pauses, and traps focus', async () => {
