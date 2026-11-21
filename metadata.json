@@ -1,6 +1,6 @@
 {
   "name": "LiftBench",
-  "description": "Interactive twin-tower elevator dispatch benchmark comparing Collective SCAN, Destination Dispatch, Nearest Car ETA, Static Zoning, Eco Batching, and FIFO algorithms with live telemetry and Phase I fire recall.",
+  "description": "Deterministic side-by-side elevator simulator benchmarking 6 dispatch algorithms on identical traffic with wait heatmaps and CIBSE metrics.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
