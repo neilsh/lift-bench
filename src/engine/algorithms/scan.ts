@@ -35,21 +35,32 @@ function pickNextStandardFloor(
       } else if (car.direction === -1 && f <= downBound && q.some((p) => p.dir === -1)) {
         stopSet.add(f);
       } else if (car.direction === 0) {
-        let betterIdleExists = false;
+        let anotherCarCovers = false;
         const myDist = Math.abs(car.floor - f);
         for (const other of world.cars) {
-          if (other.id !== car.id && other.state === 'IDLE') {
+          if (other.id === car.id) continue;
+          // Another car with room is already on its way to (or stopped at) this floor, so
+          // don't send a second idle car after the same call.
+          if (
+            other.passengers.length < cap &&
+            ((other.state === 'MOVING' && other.targetFloors.includes(f)) ||
+              (other.state === 'DWELLING' && Math.abs(other.floor - f) < 0.05))
+          ) {
+            anotherCarCovers = true;
+            break;
+          }
+          if (other.state === 'IDLE') {
             const otherDist = Math.abs(other.floor - f);
             if (
               otherDist < myDist - 0.1 ||
               (Math.abs(otherDist - myDist) <= 0.1 && other.id < car.id)
             ) {
-              betterIdleExists = true;
+              anotherCarCovers = true;
               break;
             }
           }
         }
-        if (!betterIdleExists) {
+        if (!anotherCarCovers) {
           stopSet.add(f);
         }
       }

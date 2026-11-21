@@ -20,19 +20,6 @@ describe('standard collective (SCAN)', () => {
     expect(p.assignedCarId).toBeNull();
   });
 
-  it('lets the closer of two idle cars take a new call on the first step', () => {
-    const cfg = makeAlgoConfig('standard', { floors: 10, cars: 2 });
-    const sim = createQuietSimulation(cfg);
-    parkCar(sim.left.cars[0], 1);
-    parkCar(sim.left.cars[1], 8);
-    addWaitingPassenger(sim, cfg, sim.left, 7, 2);
-
-    advanceSeconds(sim, cfg, 0.05);
-    // On the very first step the closer car wins and the farther one holds.
-    expect(sim.left.cars[1].state).toBe('MOVING');
-    expect(sim.left.cars[0].state).toBe('IDLE');
-  });
-
   it('answers same-direction calls on the way up and leaves opposite calls for the way down', () => {
     const cfg = makeAlgoConfig('standard', { floors: 12, cars: 1, carCapacity: 8 });
     const sim = createQuietSimulation(cfg);
@@ -52,12 +39,9 @@ describe('standard collective (SCAN)', () => {
     expect(world.completed.count).toBe(3);
   });
 
-  // Known issue: the "better idle car" check in pickNextStandardFloor only compares against
-  // cars that are still IDLE. Once the winning car starts moving, the other idle car no longer
-  // sees a better candidate and sets off toward the same call, then turns back when the call is
-  // gone (wasted motor start and mileage). These two tests assert the intended single-car
-  // response and are marked `it.fails` until that is fixed; vitest will flag them when it is.
-  it.fails('sends only the lower-numbered of two equally close idle cars to a new call', () => {
+  // Regression: once one idle car takes a call, the other idle cars must not set off after
+  // the same call (they used to, because they only deferred to cars that were still IDLE).
+  it('sends only the lower-numbered of two equally close idle cars to a new call', () => {
     const cfg = makeAlgoConfig('standard', { floors: 10, cars: 2 });
     const sim = createQuietSimulation(cfg);
     parkCar(sim.left.cars[0], 1);
@@ -69,15 +53,21 @@ describe('standard collective (SCAN)', () => {
     expect(sim.left.cars[1].state).toBe('IDLE');
   });
 
-  it.fails('sends the closer idle car rather than the lower-numbered one', () => {
+  it('sends the closer idle car rather than the lower-numbered one', () => {
     const cfg = makeAlgoConfig('standard', { floors: 10, cars: 2 });
     const sim = createQuietSimulation(cfg);
     parkCar(sim.left.cars[0], 1);
     parkCar(sim.left.cars[1], 8);
     addWaitingPassenger(sim, cfg, sim.left, 7, 2);
 
-    advanceSeconds(sim, cfg, 1);
+    advanceSeconds(sim, cfg, 0.3);
     expect(sim.left.cars[0].state).toBe('IDLE');
     expect(sim.left.cars[1].state).toBe('MOVING');
+
+    advanceSeconds(sim, cfg, 20);
+    expect(sim.left.completed.count).toBe(1);
+    // Only car 1 ever moved: 1 floor down to the caller, 5 more to floor 2.
+    expect(sim.left.totalMotorStarts).toBe(2);
+    expect(sim.left.cars[0].floor).toBe(1);
   });
 });
