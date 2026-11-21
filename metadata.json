@@ -1,6 +1,5 @@
 {
   "name": "LiftBench",
   "description": "Deterministic side-by-side elevator simulator benchmarking 6 dispatch algorithms on identical traffic with wait heatmaps and CIBSE metrics.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "requestFramePermissions": []
 }
