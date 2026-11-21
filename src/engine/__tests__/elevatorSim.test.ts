@@ -16,6 +16,7 @@ import {
   stepTwinSimulation,
   toggleFireAlarmState,
 } from '../elevatorSim';
+import { closeCarRoundTrip } from '../worldHelpers';
 import type { DispatchAlgorithm, DistributionMode, SimConfig } from '../../types/simulation';
 
 function makeConfig(overrides: Partial<SimConfig> = {}): SimConfig {
@@ -441,5 +442,50 @@ describe('Elevator Dispatch Algorithms & Engineering Telemetry', () => {
         expect(sim.left.completed.count).toBeGreaterThan(servedBeforeClear);
       }
     );
+  });
+
+  describe('Live Config Synchronization', () => {
+    it('updates carCapacity on both left and right worlds when stepped with a new config', () => {
+      const cfg = makeConfig({ carCapacity: 8 });
+      const sim = createSimulation(cfg, 20261118, 0);
+
+      expect(sim.left.carCapacity).toBe(8);
+      expect(sim.right.carCapacity).toBe(8);
+
+      stepTwinSimulation(sim, { ...cfg, carCapacity: 12 }, FIXED_DT);
+
+      expect(sim.left.carCapacity).toBe(12);
+      expect(sim.right.carCapacity).toBe(12);
+
+      stepTwinSimulation(sim, { ...cfg, carCapacity: 1 }, FIXED_DT);
+
+      expect(sim.left.carCapacity).toBe(4);
+      expect(sim.right.carCapacity).toBe(4);
+
+      stepTwinSimulation(sim, { ...cfg, carCapacity: 999 }, FIXED_DT);
+
+      expect(sim.left.carCapacity).toBe(16);
+      expect(sim.right.carCapacity).toBe(16);
+    });
+
+    it('uses updated world.carCapacity when closing round trips', () => {
+      const cfg = makeConfig({ carCapacity: 8 });
+      const sim = createSimulation(cfg, 20261118, 0);
+
+      stepTwinSimulation(sim, { ...cfg, carCapacity: 16 }, FIXED_DT);
+      expect(sim.left.carCapacity).toBe(16);
+
+      const car = sim.left.cars[0];
+      car.cycleStartTime = 0;
+      car.cyclePeakFloor = 5;
+      car.cycleUpperStops = 1;
+      car.cyclePeakLoad = 8;
+
+      closeCarRoundTrip(20, sim.left, car);
+
+      const latestSample = sim.left.roundTripSamples[sim.left.roundTripSamples.length - 1];
+      expect(latestSample).toBeDefined();
+      expect(latestSample.loadFactorPct).toBe(50);
+    });
   });
 });

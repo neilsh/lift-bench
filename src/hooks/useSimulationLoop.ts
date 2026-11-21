@@ -185,7 +185,7 @@ export function useSimulationLoop() {
         if (nextLayout) layoutRef.current = nextLayout;
       }
 
-      if (now - lastHudUpdate >= 100) {
+      if (!pb.paused && now - lastHudUpdate >= 100) {
         lastHudUpdate = now;
         setTelemetry(buildTelemetrySnapshot(sim, cfg));
       }
@@ -236,8 +236,11 @@ export function useSimulationLoop() {
     const nextPaused = !playbackRef.current.paused;
     playbackRef.current.paused = nextPaused;
     setPaused(nextPaused);
+    if (nextPaused) {
+      syncSnapshot();
+    }
     setAnnouncement(nextPaused ? 'Simulation paused.' : 'Simulation resumed.');
-  }, []);
+  }, [syncSnapshot]);
 
   const handleSelectSpeed = useCallback((nextSpeed: PlaybackState['speed']) => {
     playbackRef.current.speed = nextSpeed;
@@ -295,8 +298,11 @@ export function useSimulationLoop() {
       setConfig(nextCfg);
       if (needsReinit) {
         simRef.current = createSimulation(nextCfg, playbackRef.current.seed, 75);
-        syncSnapshot();
+      } else {
+        simRef.current.left.carCapacity = nextCfg.carCapacity;
+        simRef.current.right.carCapacity = nextCfg.carCapacity;
       }
+      syncSnapshot();
     },
     [syncSnapshot]
   );

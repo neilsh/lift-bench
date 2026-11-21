@@ -233,6 +233,8 @@ function pruneExpiredWorldArtifacts(simTime: number, world: BuildingWorld) {
 
 export function stepTwinSimulation(sim: SimState, cfg: SimConfig, dt: number) {
   const safeCfg = sanitizeSimConfig(cfg);
+  sim.left.carCapacity = safeCfg.carCapacity;
+  sim.right.carCapacity = safeCfg.carCapacity;
   sim.simTime += dt;
 
   if (!sim.fireAlarmActive) {
