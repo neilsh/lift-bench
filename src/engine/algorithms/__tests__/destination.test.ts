@@ -197,6 +197,10 @@ describe('destination dispatch under fire alarm', () => {
     const sim = createQuietSimulation(cfg, 5);
     const world = sim.left;
     for (let i = 0; i < 6; i++) addWaitingPassenger(sim, cfg, world, 1, 8 + (i % 4));
+    // evacuatedCount resets each time an alarm starts, so keep a running total across alarms.
+    let evacuatedEarlier = 0;
+    const expectAllAccounted = (expected: number) =>
+      expect(accountedPassengers(world) + evacuatedEarlier).toBe(expected);
 
     advanceUntil(sim, cfg, () => world.cars.some((c) => c.floor > 4), 30);
     toggleFireAlarmState(sim, cfg);
@@ -210,7 +214,9 @@ describe('destination dispatch under fire alarm', () => {
       expect(c.passengers.length).toBeLessThanOrEqual(cfg.carCapacity);
     }
 
+    expectAllAccounted(6);
     advanceUntil(sim, cfg, () => world.cars.some((c) => c.floor > 1.5), 10);
+    evacuatedEarlier += world.evacuatedCount;
     toggleFireAlarmState(sim, cfg);
     advanceUntil(sim, cfg, () => world.cars.every((c) => c.state === 'FIRE_LOCKED'), 30);
     expect(world.cars.every((c) => c.state === 'FIRE_LOCKED' && c.floor === 1)).toBe(true);
@@ -229,6 +235,7 @@ describe('destination dispatch under fire alarm', () => {
     );
     expect(countWaiting(world) + countOnboard(world)).toBe(0);
     expect(world.completed.count).toBe(completedBefore + 2);
+    expectAllAccounted(8);
   });
 });
 
@@ -256,9 +263,18 @@ describe('destination vs eco differences', () => {
     addWaitingPassenger(sim, cfg, sim.left, 1, 9, { spawnTime: 30 });
 
     const car = sim.left.cars[0];
-    const departAt = advanceUntil(sim, cfg, () => car.floor > 1.05, 20);
+    let maxHold = 0;
+    const departAt = advanceUntil(
+      sim,
+      cfg,
+      () => car.floor > 1.05,
+      20,
+      () => {
+        maxHold = Math.max(maxHold, car.batchHoldUsed ?? 0);
+      }
+    );
     expect(departAt).not.toBeNull();
-    expect(car.batchHoldUsed ?? 0).toBe(0);
+    expect(maxHold).toBe(0);
     expect(departAt! - 50).toBeLessThan(cfg.stopPenalty + 1.5);
   });
 
@@ -291,7 +307,7 @@ describe('destination vs eco differences', () => {
 });
 
 describe('destination dispatch adopting down calls en route', () => {
-  it('a car heading down steals a down call from a farther assigned car', () => {
+  it('an idle car upstairs takes over a down call from a busier assigned car', () => {
     const cfg = makeAlgoConfig('destination', { floors: 14, cars: 2, carCapacity: 8 });
     const sim = createQuietSimulation(cfg);
     const world = sim.left;

@@ -163,24 +163,13 @@ export function describeSharedEdgeCases(algo: DispatchAlgorithm) {
           const total = accountedPassengers(world);
           expect(total).toBe(8);
 
-          const midTrip = advanceUntil(
-            sim,
-            cfg,
-            () =>
-              world.cars.some(
-                (c) =>
-                  c.state === 'MOVING' &&
-                  c.direction === 1 &&
-                  c.floor > 4 &&
-                  c.passengers.length > 0
-              ),
-            60
-          );
+          const isLoadedAndClimbing = (c: (typeof world.cars)[number]) =>
+            c.state === 'MOVING' && c.direction === 1 && c.floor > 4 && c.passengers.length > 0;
+
+          const midTrip = advanceUntil(sim, cfg, () => world.cars.some(isLoadedAndClimbing), 60);
           expect(midTrip).not.toBeNull();
 
-          const loadedCar = world.cars.find(
-            (c) => c.state === 'MOVING' && c.direction === 1 && c.passengers.length > 0
-          )!;
+          const loadedCar = world.cars.find(isLoadedAndClimbing)!;
           const ridersAtAlarm = loadedCar.passengers.length;
           const completedAtAlarm = world.completed.count;
 

@@ -48,9 +48,19 @@ describe('standard collective (SCAN)', () => {
     parkCar(sim.left.cars[1], 1);
     addWaitingPassenger(sim, cfg, sim.left, 5, 9);
 
-    advanceSeconds(sim, cfg, 1);
-    expect(sim.left.cars[0].state).toBe('MOVING');
-    expect(sim.left.cars[1].state).toBe('IDLE');
+    let car1Moved = false;
+    advanceUntil(
+      sim,
+      cfg,
+      () => sim.left.completed.count === 1,
+      30,
+      () => {
+        if (sim.left.cars[1].state !== 'IDLE') car1Moved = true;
+      }
+    );
+    expect(sim.left.completed.count).toBe(1);
+    expect(car1Moved).toBe(false);
+    expect(sim.left.cars[1].floor).toBe(1);
   });
 
   it('sends the closer idle car rather than the lower-numbered one', () => {
@@ -69,5 +79,30 @@ describe('standard collective (SCAN)', () => {
     // Only car 1 ever moved: 1 floor down to the caller, 5 more to floor 2.
     expect(sim.left.totalMotorStarts).toBe(2);
     expect(sim.left.cars[0].floor).toBe(1);
+  });
+
+  it('still sends an idle car when the car heading to that floor is loaded the other way', () => {
+    const cfg = makeAlgoConfig('standard', { floors: 10, cars: 2, carCapacity: 8 });
+    const sim = createQuietSimulation(cfg);
+    const world = sim.left;
+    parkCar(world.cars[0], 9);
+    parkCar(world.cars[1], 1);
+    addWaitingPassenger(sim, cfg, world, 9, 5);
+    addWaitingPassenger(sim, cfg, world, 9, 2);
+
+    // Car 0 picks both riders up at 9 and sets off down, next stop floor 5.
+    advanceUntil(sim, cfg, () => world.cars[0].state === 'MOVING', 20);
+    expect(world.cars[0].passengers).toHaveLength(2);
+    expect(world.cars[0].targetFloors).toEqual([5]);
+    expect(world.cars[1].state).toBe('IDLE');
+
+    // An up caller at 5 can't board car 0, which keeps going down after its stop there.
+    const upCaller = addWaitingPassenger(sim, cfg, world, 5, 9);
+    advanceSeconds(sim, cfg, 0.2);
+    expect(world.cars[1].state).toBe('MOVING');
+
+    advanceUntil(sim, cfg, () => world.completed.count === 3, 60);
+    expect(world.completed.count).toBe(3);
+    expect(world.waitingQueues[5]).not.toContain(upCaller);
   });
 });

@@ -33,9 +33,11 @@ describe('nearest car (ETA)', () => {
     const cfg = makeAlgoConfig('nearest', { floors: 14, cars: 2, carCapacity: 4 });
     const sim = createQuietSimulation(cfg);
     parkCar(sim.left.cars[0], 5);
-    parkCar(sim.left.cars[1], 1);
+    parkCar(sim.left.cars[1], 14);
     for (let i = 0; i < cfg.carCapacity; i++) {
       sim.left.waitingQueues[5].push(makePassenger(5, 12, { assignedCarId: 0 }));
+      // Give car 1 the same total load elsewhere, so only the full-pickup penalty separates them.
+      sim.left.waitingQueues[13].push(makePassenger(13, 2, { assignedCarId: 1 }));
     }
 
     const pax = makePassenger(5, 12);
