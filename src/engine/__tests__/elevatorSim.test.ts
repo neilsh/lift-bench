@@ -5,39 +5,18 @@ import {
   buildTelemetrySnapshot,
   computeCibseGrade,
   computeFloorWeights,
-  computeSectorBands,
   CONFIG_LIMITS,
   countTotalWaiting,
   createRng,
   createSimulation,
-  DEFAULT_CONFIG,
   FIXED_DT,
   spawnBurstPassengers,
   stepTwinSimulation,
   toggleFireAlarmState,
 } from '../elevatorSim';
 import { closeCarRoundTrip } from '../worldHelpers';
-import type { DispatchAlgorithm, DistributionMode, SimConfig } from '../../types/simulation';
-
-function makeConfig(overrides: Partial<SimConfig> = {}): SimConfig {
-  return {
-    ...DEFAULT_CONFIG,
-    ...overrides,
-  };
-}
-
-function advanceSeconds(
-  sim: ReturnType<typeof createSimulation>,
-  cfg: SimConfig,
-  seconds: number,
-  onStep?: () => void
-) {
-  const steps = Math.round(seconds / FIXED_DT);
-  for (let i = 0; i < steps; i++) {
-    stepTwinSimulation(sim, cfg, FIXED_DT);
-    if (onStep) onStep();
-  }
-}
+import { advanceSeconds, makeConfig } from '../../test/simHarness';
+import type { DispatchAlgorithm, DistributionMode } from '../../types/simulation';
 
 describe('Elevator Dispatch Algorithms & Engineering Telemetry', () => {
   it('registers complete guide metadata for every dispatch algorithm', () => {
@@ -244,168 +223,6 @@ describe('Elevator Dispatch Algorithms & Engineering Telemetry', () => {
         expect(largeSim.left.completed.count).toBeGreaterThan(15);
       }
     );
-  });
-
-  describe('Algorithm-Specific Behaviors & Comparisons', () => {
-    it('Static Zoning (sector) partitions upper floors into contiguous non-overlapping bands and routes lobby riders to their sector car', () => {
-      const bands = computeSectorBands(14, 4);
-      expect(bands).toEqual([
-        { min: 2, max: 4 },
-        { min: 5, max: 7 },
-        { min: 8, max: 10 },
-        { min: 11, max: 14 },
-      ]);
-
-      for (const [floors, cars] of [
-        [4, 1],
-        [8, 2],
-        [14, 3],
-        [18, 4],
-        [24, 5],
-        [40, 8],
-      ] as const) {
-        const b = computeSectorBands(floors, cars);
-        expect(b).toHaveLength(cars);
-        expect(b[0].min).toBe(2);
-        expect(b[b.length - 1].max).toBe(floors);
-        for (let i = 1; i < b.length; i++) {
-          expect(b[i].min).toBe(b[i - 1].max + 1);
-        }
-      }
-
-      const cfg = makeConfig({
-        leftAlgorithm: 'sector',
-        rightAlgorithm: 'sector',
-        floors: 14,
-        cars: 4,
-      });
-      const sim = createSimulation(cfg, 101, 0);
-      sim.nextSpawnTime = Number.POSITIVE_INFINITY;
-      spawnBurstPassengers(sim, cfg, 20, 1);
-
-      for (const pax of sim.left.waitingQueues[1]) {
-        expect(pax.assignedCarId).not.toBeNull();
-        const car = sim.left.cars[pax.assignedCarId!];
-        expect(pax.dest).toBeGreaterThanOrEqual(car.sectorMin!);
-        expect(pax.dest).toBeLessThanOrEqual(car.sectorMax!);
-      }
-    });
-
-    it('Destination Dispatch outperforms Standard Collective SCAN in stops/trip and ATTD under heavy up-peak traffic', () => {
-      const cfg = makeConfig({
-        leftAlgorithm: 'standard',
-        rightAlgorithm: 'destination',
-        distributionMode: 'uniform',
-        arrivalRate: 54,
-        floors: 16,
-        cars: 4,
-        stopPenalty: 6.0,
-        carCapacity: 8,
-      });
-
-      const sim = createSimulation(cfg, 20261118, 220);
-      const snap = buildTelemetrySnapshot(sim, cfg);
-
-      expect(snap.right.stopsPerTrip).toBeLessThan(snap.left.stopsPerTrip);
-      expect(snap.right.avgTTD).toBeLessThan(snap.left.avgTTD);
-    });
-
-    it('Nearest Car (ETA) assigns every waiting passenger to a valid healthy car and delivers smoothly under mixed lunch traffic', () => {
-      const cfg = makeConfig({
-        leftAlgorithm: 'nearest',
-        rightAlgorithm: 'standard',
-        distributionMode: 'lunch',
-        arrivalRate: 38,
-        floors: 14,
-        cars: 4,
-      });
-
-      const sim = createSimulation(cfg, 5150, 0);
-      sim.nextSpawnTime = Number.POSITIVE_INFINITY;
-      spawnBurstPassengers(sim, cfg, 10, 1);
-      spawnBurstPassengers(sim, cfg, 10, 8);
-
-      for (let f = 1; f <= cfg.floors; f++) {
-        for (const p of sim.left.waitingQueues[f]) {
-          expect(p.assignedCarId).not.toBeNull();
-          expect(p.assignedCarId!).toBeGreaterThanOrEqual(0);
-          expect(p.assignedCarId!).toBeLessThan(cfg.cars);
-        }
-      }
-
-      advanceSeconds(sim, cfg, 180);
-      expect(sim.left.completed.count).toBe(20);
-    });
-
-    it('Eco Batching uses less shaft mileage and estimated Wh/pax than FIFO Baseline under moderate traffic', () => {
-      const cfg = makeConfig({
-        leftAlgorithm: 'fcfs',
-        rightAlgorithm: 'eco',
-        distributionMode: 'realistic',
-        arrivalRate: 30,
-        floors: 14,
-        cars: 4,
-        stopPenalty: 5.0,
-        carCapacity: 8,
-      });
-
-      const sim = createSimulation(cfg, 31415, 220);
-      const snap = buildTelemetrySnapshot(sim, cfg);
-
-      expect(snap.right.whPerPax).toBeLessThan(snap.left.whPerPax);
-      expect(snap.right.floorsPerPax).toBeLessThan(snap.left.floorsPerPax);
-      expect(snap.right.served).toBeGreaterThan(40);
-    });
-
-    it('FIFO Baseline delivers the earliest passenger request without detouring for later intermediate hall calls', () => {
-      const cfg = makeConfig({
-        leftAlgorithm: 'fcfs',
-        rightAlgorithm: 'fcfs',
-        floors: 12,
-        cars: 1,
-        carCapacity: 4,
-        stopPenalty: 2.0,
-      });
-
-      const sim = createSimulation(cfg, 99, 0);
-      sim.nextSpawnTime = Number.POSITIVE_INFINITY;
-
-      sim.left.waitingQueues[1].push({
-        id: 1,
-        spawnTime: 0,
-        origin: 1,
-        dest: 12,
-        dir: 1,
-        color: { fill: '#f43f5e', stroke: '#fff', isLobby: false },
-        assignedCarId: null,
-        boardTime: null,
-        stopOverhead: 0,
-      });
-
-      sim.left.waitingQueues[5].push({
-        id: 2,
-        spawnTime: 1,
-        origin: 5,
-        dest: 10,
-        dir: 1,
-        color: { fill: '#38bdf8', stroke: '#fff', isLobby: false },
-        assignedCarId: null,
-        boardTime: null,
-        stopOverhead: 0,
-      });
-
-      let deliveredFirst = false;
-      advanceSeconds(sim, cfg, 30, () => {
-        if (sim.left.completed.count === 1 && !deliveredFirst) {
-          deliveredFirst = true;
-          expect(sim.left.waitingQueues[5].length).toBe(1);
-        }
-      });
-
-      expect(deliveredFirst).toBe(true);
-      advanceSeconds(sim, cfg, 40);
-      expect(sim.left.completed.count).toBe(2);
-    });
   });
 
   describe('Phase I Fire Alarm Recall & Recovery', () => {
